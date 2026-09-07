@@ -1,0 +1,10 @@
+# Dependências e caches locais
+node_modules/
+.DS_Store
+Thumbs.db
+.vercel
+
+# Arquivos de trabalho / PDFs pesados não necessários no deploy
+cardapio.pdf
+cardapio_preview.png/
+assets/images/

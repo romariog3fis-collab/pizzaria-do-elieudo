@@ -1,0 +1,72 @@
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-family: 'Courier New', Courier, monospace !important;
+    font-size: 12px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .hero-header,
+  .sticky-nav,
+  .cart-floating-bar,
+  .modal-overlay,
+  .btn-checkout-whatsapp,
+  .btn-close,
+  .btn-print,
+  .menu-grid,
+  .section-header {
+    display: none !important;
+  }
+
+  #thermal-receipt {
+    display: block !important;
+    width: 80mm !important;
+    margin: 0 auto !important;
+    padding: 8px !important;
+  }
+
+  .receipt-header {
+    text-align: center;
+    border-bottom: 1px dashed #000;
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+  }
+
+  .receipt-title {
+    font-size: 16px;
+    font-weight: bold;
+    text-transform: uppercase;
+  }
+
+  .receipt-body {
+    border-bottom: 1px dashed #000;
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+  }
+
+  .receipt-row {
+    display: flex;
+    justify-content: space-between;
+    margin: 4px 0;
+  }
+
+  .receipt-total {
+    font-size: 14px;
+    font-weight: bold;
+    display: flex;
+    justify-content: space-between;
+    margin-top: 6px;
+  }
+
+  .receipt-footer {
+    text-align: center;
+    font-size: 11px;
+    margin-top: 10px;
+  }
+}
+
+#thermal-receipt {
+  display: none;
+}

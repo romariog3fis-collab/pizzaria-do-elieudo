@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pizzaria do Elieudo - Painel Administrativo & KDS</title>
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  
+  <!-- CSS Stylesheets -->
+  <link rel="stylesheet" href="css/admin.css" />
+</head>
+<body>
+
+  <!-- Barra Superior do Painel -->
+  <header class="admin-navbar">
+    <div class="brand-admin">
+      <span style="font-size: 1.8rem;">🍕</span>
+      <div>
+        <h1>Pizzaria do <span>Elieudo</span></h1>
+      </div>
+      <span class="badge-kds">Painel Operacional</span>
+    </div>
+
+    <div class="admin-actions">
+      <!-- Botão Rápido de Status Aberto/Fechado da Pizzaria -->
+      <button class="btn-admin btn-store-toggle is-open" id="btn-toggle-store-status" onclick="toggleStoreStatus()" title="Clique para abrir ou fechar a loja para pedidos">
+        <span class="store-status-dot" id="header-store-dot"></span>
+        <span id="header-store-text">🟢 Loja Aberta</span>
+      </button>
+
+      <!-- Botão para Personalizar Horários de Funcionamento -->
+      <button class="btn-admin" id="btn-open-hours-modal" onclick="openHoursModal()" title="Personalizar Horários e Mensagens da Loja">
+        <span>🕒 Horários</span>
+      </button>
+
+      <button class="btn-admin btn-sound-toggle active" id="btn-toggle-sound">🔔 Som Ligado</button>
+      <button class="btn-admin" id="btn-simulate-order" title="Gerar pedido de teste">➕ Simular Pedido</button>
+      <button class="btn-admin" id="btn-clear-orders" style="color: #ef4444;" title="Limpar lista">🗑️ Limpar</button>
+      <a href="index.html" target="_blank" class="btn-admin" style="background: #c21a1a; border-color: #e53935;">
+        <span>🌐 Ver Cardápio</span>
+      </a>
+    </div>
+  </header>
+
+  <!-- Abas de Navegação Principal do Painel -->
+  <nav class="admin-tabs-nav">
+    <div class="admin-tabs-container">
+      <button class="admin-tab-btn active" id="tab-btn-kds">
+        <span>📋 Pedidos & KDS Cozinha</span>
+        <span class="tab-badge-pill" id="badge-orders-count">0</span>
+      </button>
+      <button class="admin-tab-btn" id="tab-btn-stock">
+        <span>🍕 Disponibilidade & Esgotamento de Sabores</span>
+        <span class="tab-badge-pill badge-warning" id="badge-stock-out-count">0 esgotados</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- VIEW 1: KDS & PEDIDOS -->
+  <div id="view-kds">
+    <!-- Métricas Rápidas -->
+    <section class="metrics-grid">
+      <div class="metric-card">
+        <span class="metric-label">Pedidos Hoje</span>
+        <span class="metric-val" id="metric-total-orders">0</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-label">Faturamento Total</span>
+        <span class="metric-val" style="color: #10b981;" id="metric-revenue">R$ 0,00</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-label">Pedidos em Aberto</span>
+        <span class="metric-val" style="color: #f59e0b;" id="metric-active-orders">0</span>
+      </div>
+    </section>
+
+    <!-- Kanban KDS Board (4 Colunas) -->
+    <main class="kanban-board">
+      
+      <!-- 1. Pendente / Novo -->
+      <div class="kanban-column col-pendente">
+        <div class="column-header">
+          <div class="col-title-wrap">
+            <span class="col-dot"></span>
+            <span>1. Pendentes</span>
+          </div>
+          <span class="column-count" id="count-pendente">0</span>
+        </div>
+        <div class="column-cards" id="cards-pendente"></div>
+      </div>
+
+      <!-- 2. No Forno / Preparando -->
+      <div class="kanban-column col-preparando">
+        <div class="column-header">
+          <div class="col-title-wrap">
+            <span class="col-dot"></span>
+            <span>2. No Forno / Cozinha</span>
+          </div>
+          <span class="column-count" id="count-preparando">0</span>
+        </div>
+        <div class="column-cards" id="cards-preparando"></div>
+      </div>
+
+      <!-- 3. Saiu para Entrega / Balcão -->
+      <div class="kanban-column col-entrega">
+        <div class="column-header">
+          <div class="col-title-wrap">
+            <span class="col-dot"></span>
+            <span>3. Saiu p/ Entrega</span>
+          </div>
+          <span class="column-count" id="count-entrega">0</span>
+        </div>
+        <div class="column-cards" id="cards-entrega"></div>
+      </div>
+
+      <!-- 4. Finalizado -->
+      <div class="kanban-column col-finalizado">
+        <div class="column-header">
+          <div class="col-title-wrap">
+            <span class="col-dot"></span>
+            <span>4. Finalizados</span>
+          </div>
+          <span class="column-count" id="count-finalizado">0</span>
+        </div>
+        <div class="column-cards" id="cards-finalizado"></div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- VIEW 2: GESTÃO DE DISPONIBILIDADE E ESGOTAMENTO DE SABORES -->
+  <div id="view-stock" style="display: none;">
+    <div class="stock-panel-wrapper">
+      <div class="stock-header-card">
+        <div class="stock-title-block">
+          <h2>Controle de Disponibilidade & Estoque de Sabores</h2>
+          <p>Esgote ou reative sabores e produtos com um clique. Os sabores marcados como esgotados ficam bloqueados automaticamente no cardápio online dos clientes.</p>
+        </div>
+        <div class="stock-actions-bar">
+          <div class="stock-counters">
+            <div class="counter-item">
+              <span>Total de Sabores:</span> <strong id="stock-total-count">0</strong>
+            </div>
+            <div class="counter-item text-green">
+              <span>Disponíveis:</span> <strong id="stock-available-count">0</strong>
+            </div>
+            <div class="counter-item text-red">
+              <span>Esgotados:</span> <strong id="stock-out-count">0</strong>
+            </div>
+          </div>
+          <button class="btn-admin btn-restore-stock" id="btn-restore-all-stock" onclick="restoreAllStock()" title="Reativar todos os itens como disponíveis">
+            <span>🔄 Reativar Todos Disponíveis</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Banner de Feedback / Notificação -->
+      <div id="stock-notification-banner" style="display: none;"></div>
+
+      <!-- Filtros e Barra de Pesquisa -->
+      <div class="stock-filter-bar">
+        <div class="stock-search-wrap">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input type="text" id="input-stock-search" placeholder="Buscar sabor (ex: Calabresa, Frango, Nutella, Suco...)" />
+        </div>
+        <div class="stock-categories-chips" id="stock-category-filters">
+          <!-- Injetado dinamicamente via admin.js -->
+        </div>
+      </div>
+
+      <!-- Grid de Sabores e Produtos -->
+      <div class="stock-items-grid" id="stock-items-container">
+        <!-- Injetado dinamicamente via admin.js -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Configuração de Horários & Loja -->
+  <div class="admin-modal-overlay" id="hours-settings-modal" style="display: none;">
+    <div class="admin-modal-box">
+      <div class="admin-modal-header">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 1.6rem;">🕒</span>
+          <div>
+            <h3>Configurar Horário & Status da Loja</h3>
+            <span style="font-size: 0.8rem; color: var(--text-muted);">Defina se a pizzaria está aberta para receber pedidos e edite os horários</span>
+          </div>
+        </div>
+        <button class="btn-close-modal" onclick="closeHoursModal()">&times;</button>
+      </div>
+
+      <div class="admin-modal-body">
+        <div class="form-group-admin">
+          <label>Status Atual de Funcionamento:</label>
+          <div class="store-status-toggle-group">
+            <button type="button" class="btn-status-choice active choice-open" id="choice-status-open" onclick="setModalStatusChoice(true)">
+              🟢 Loja Aberta (Recebendo Pedidos)
+            </button>
+            <button type="button" class="btn-status-choice choice-closed" id="choice-status-closed" onclick="setModalStatusChoice(false)">
+              🔴 Loja Fechada (Pedidos Pausados)
+            </button>
+          </div>
+        </div>
+
+        <div class="form-group-admin">
+          <label for="input-opening-hours">Horário de Funcionamento (exibido aos clientes):</label>
+          <input type="text" id="input-opening-hours" class="admin-form-input" 
+                 placeholder="Ex: Terça a Domingo das 18:00 às 23:30" />
+          <span class="admin-input-hint">Esse texto aparece no cabeçalho e rodapé do cardápio digital do cliente.</span>
+        </div>
+
+        <div class="form-group-admin">
+          <label for="input-closed-message">Mensagem quando a loja estiver fechada:</label>
+          <textarea id="input-closed-message" class="admin-form-textarea" rows="3"
+                    placeholder="Ex: Nosso forno abre hoje às 18:00! Fique à vontade para olhar o cardápio."></textarea>
+          <span class="admin-input-hint">Aparece em destaque no topo do cardápio quando a loja estiver fechada.</span>
+        </div>
+      </div>
+
+      <div class="admin-modal-footer">
+        <button type="button" class="btn-admin" onclick="closeHoursModal()">Cancelar</button>
+        <button type="button" class="btn-admin btn-save-hours" onclick="saveHoursSettings()">
+          💾 Salvar Configurações
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Contêiner Invisível de Impressão Térmica 80mm -->
+  <div id="admin-thermal-receipt"></div>
+
+  <!-- Scripts -->
+  <script src="js/menu-data.js"></script>
+  <script src="js/admin.js"></script>
+</body>
+</html>

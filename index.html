@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Pizzaria do Elieudo - Cardápio Digital & Delivery</title>
+  <meta name="description" content="Peça online as melhores pizzas tradicionais, premium e doces da Pizzaria do Elieudo em Jacaúna, Aquiraz/CE. Entrega rápida via WhatsApp!" />
+  
+  <!-- Google Fonts: Plus Jakarta Sans & Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  
+  <!-- CSS Stylesheets -->
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/print.css" />
+</head>
+<body>
+
+  <!-- Top Hero Header -->
+  <header class="hero-header">
+    <div class="hero-container">
+      <div class="brand-badge">
+        <span>🔥 Forno a Lenha & Sabor Autêntico</span>
+      </div>
+      <h1 class="brand-title">Pizzaria do <span>Elieudo</span></h1>
+      <div class="brand-info">
+        <div class="status-badge open" id="header-status-badge">
+          <span class="status-dot"></span> <span id="header-status-text">Aberto Agora</span>
+        </div>
+        <div class="info-item">
+          <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+          <span>Elieudo Motos - Jacaúna - Aquiraz/CE</span>
+        </div>
+        <div class="info-item">
+          <svg viewBox="0 0 24 24"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg>
+          <span>Delivery: <strong>(85) 99177-4881</strong></span>
+        </div>
+        <div class="info-item" id="header-hours-block">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          <span>Horário: <strong id="header-hours-text">Terça a Domingo das 18:00 às 23:30</strong></span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Banner de Aviso Quando a Pizzaria Estiver Fechada -->
+  <div id="store-closed-banner" class="store-closed-alert" style="display: none;">
+    <div class="closed-alert-container">
+      <div class="closed-alert-icon">🌙</div>
+      <div class="closed-alert-body">
+        <h3 id="closed-banner-title">Pizzaria Fechada no Momento</h3>
+        <p id="closed-banner-desc">Nosso horário de funcionamento é de Terça a Domingo das 18:00 às 23:30. Você pode consultar nosso cardápio, mas novos pedidos estão temporariamente pausados.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sticky Categories Navigation Bar -->
+  <nav class="sticky-nav">
+    <div class="nav-container" id="category-tabs-container">
+      <!-- Injetado dinamicamente via app.js -->
+    </div>
+  </nav>
+
+  <!-- Main Content Container -->
+  <main class="main-wrapper" id="menu-container">
+    <!-- Seções e cards renderizados via JavaScript -->
+  </main>
+
+  <!-- Barra Flutuante do Carrinho (Bottom Bar) -->
+  <aside class="cart-floating-bar" id="cart-floating-bar" style="display: none;">
+    <div class="cart-info">
+      <div class="cart-icon-badge">
+        <span>🛒</span>
+        <span class="cart-count" id="cart-floating-count">0</span>
+      </div>
+      <div class="cart-text-wrap">
+        <span class="cart-text-title">Ver Carrinho</span>
+        <span class="cart-text-sub" id="cart-floating-subtotal">R$ 0,00</span>
+      </div>
+    </div>
+    <button class="cart-btn-view">Avançar ➔</button>
+  </aside>
+
+  <!-- MODAL: Customizador de Pizza (Tamanho, Meio a Meio, Bordas, Extras) -->
+  <div class="modal-overlay" id="pizza-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <h2 class="modal-title" id="modal-pizza-name">Montar Pizza</h2>
+          <p style="font-size: 0.85rem; color: var(--text-muted);" id="modal-pizza-desc"></p>
+        </div>
+        <button class="btn-close" id="btn-close-pizza-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        
+        <!-- 1. Tamanhos -->
+        <div>
+          <div class="option-group-title">
+            <span>1. Escolha o Tamanho</span>
+            <span style="font-size: 0.8rem; color: var(--text-dim);">Obrigatório</span>
+          </div>
+          <div class="size-selector" id="modal-sizes-container">
+            <!-- Injetado via JS -->
+          </div>
+        </div>
+
+        <!-- 2. Sabores (Inteira ou Meio a Meio) -->
+        <div>
+          <div class="option-group-title">
+            <span>2. Sabores da Pizza</span>
+          </div>
+          <div class="toggle-flavor-mode">
+            <div class="toggle-btn active" id="toggle-single-flavor">1 Sabor (Inteira)</div>
+            <div class="toggle-btn" id="toggle-half-flavor">2 Sabores (Meio a Meio)</div>
+          </div>
+          
+          <div id="second-flavor-select-box" style="display: none;" class="flavor-select-box">
+            <label style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">Selecione a 2ª Metade:</label>
+            <select id="select-second-flavor"></select>
+            <span style="font-size: 0.75rem; color: var(--text-dim);">* Cobrado pelo sabor de maior valor</span>
+          </div>
+        </div>
+
+        <!-- 3. Bordas Recheadas -->
+        <div>
+          <div class="option-group-title">
+            <span>3. Escolha a Borda Recheada</span>
+          </div>
+          <select id="select-crust" class="custom-select"></select>
+        </div>
+
+        <!-- 4. Adicional em cima da pizza -->
+        <div>
+          <div class="option-group-title">
+            <span>4. Adicional no Topo (Opcional)</span>
+          </div>
+          <select id="select-extra-top" class="custom-select"></select>
+        </div>
+
+        <!-- 5. Observações do Cliente -->
+        <div>
+          <div class="option-group-title">
+            <span>5. Alguma Observação?</span>
+          </div>
+          <textarea id="modal-pizza-obs" class="custom-textarea" placeholder="Ex: Sem cebola, massa bem assada, etc."></textarea>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <div>
+          <span style="font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase;">Total da Pizza</span>
+          <div style="font-family: var(--font-heading); font-size: 1.5rem; font-weight: 800; color: var(--amber);" id="modal-calculated-price">R$ 0,00</div>
+        </div>
+        <button class="btn-add" id="btn-modal-add-cart" style="padding: 12px 24px; font-size: 1rem;">
+          Adicionar ao Pedido
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Drawer de Carrinho & Finalização do Pedido (Checkout) -->
+  <div class="modal-overlay" id="cart-drawer-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title">Seu Pedido</h2>
+        <button class="btn-close" id="btn-close-cart-drawer">&times;</button>
+      </div>
+      <div class="modal-body">
+        
+        <!-- Lista de Itens -->
+        <div id="cart-items-list"></div>
+
+        <!-- Tipo de Entrega -->
+        <div style="margin-top: 10px;">
+          <div class="option-group-title">Tipo de Pedido</div>
+          <div class="delivery-type-tabs">
+            <div class="delivery-tab-btn active" id="tab-type-delivery">🛵 Entrega (Delivery)</div>
+            <div class="delivery-tab-btn" id="tab-type-balcao">🏪 Retirada no Balcão</div>
+          </div>
+        </div>
+
+        <!-- Dados do Cliente -->
+        <div class="form-group">
+          <label>Seu Nome *</label>
+          <input type="text" id="input-customer-name" class="form-input" placeholder="Como podemos te chamar?" required />
+        </div>
+
+        <div class="form-group">
+          <label>WhatsApp / Telefone</label>
+          <input type="tel" id="input-customer-phone" class="form-input" placeholder="(85) 9____-____" />
+        </div>
+
+        <!-- Campos de Endereço (Apenas se Delivery) -->
+        <div id="delivery-address-group">
+          <div class="form-group">
+            <label>Endereço de Entrega (Rua, Número, Bairro) *</label>
+            <input type="text" id="input-customer-address" class="form-input" placeholder="Ex: Rua Principal, 123 - Jacaúna" />
+          </div>
+          <div class="form-group">
+            <label>Ponto de Referência</label>
+            <input type="text" id="input-customer-reference" class="form-input" placeholder="Ex: Próximo ao mercadinho, portão branco" />
+          </div>
+        </div>
+
+        <!-- Forma de Pagamento -->
+        <div class="form-group">
+          <label>Forma de Pagamento *</label>
+          <select id="select-payment-method" class="form-input">
+            <option value="pix">PIX (Chave enviada no WhatsApp)</option>
+            <option value="cartao">Cartão de Crédito / Débito na Entrega</option>
+            <option value="dinheiro">Dinheiro</option>
+          </select>
+        </div>
+
+        <div class="form-group" id="change-input-group" style="display: none;">
+          <label>Troco para quanto?</label>
+          <input type="text" id="input-change-for" class="form-input" placeholder="Ex: R$ 50,00 ou R$ 100,00" />
+        </div>
+
+      </div>
+      
+      <div class="modal-footer" style="flex-direction: column; gap: 12px; align-items: stretch;">
+        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+          <span style="font-weight: 700; color: var(--text-muted);">Total do Pedido:</span>
+          <span style="font-family: var(--font-heading); font-size: 1.6rem; font-weight: 800; color: var(--amber);" id="checkout-total-val">R$ 0,00</span>
+        </div>
+        
+        <div>
+          <button class="btn-checkout-whatsapp" id="btn-submit-whatsapp">
+            <span>Pedir pelo WhatsApp</span>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91C2.13 13.66 2.59 15.36 3.45 16.86L2.05 22L7.3 20.62C8.75 21.41 10.38 21.83 12.04 21.83C17.5 21.83 21.95 17.38 21.95 11.92C21.95 9.27 20.92 6.78 19.05 4.91C17.18 3.03 14.69 2 12.04 2M12.05 3.67C14.25 3.67 16.31 4.53 17.87 6.09C19.42 7.65 20.28 9.72 20.28 11.92C20.28 16.46 16.58 20.15 12.04 20.15C10.56 20.15 9.11 19.76 7.85 19L7.55 18.83L4.43 19.65L5.26 16.61L5.06 16.29C4.24 15 3.8 13.47 3.8 11.91C3.81 7.37 7.5 3.67 12.05 3.67Z"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rodapé Institucional -->
+  <footer style="text-align: center; padding: 30px 20px 80px; color: var(--text-dim); font-size: 0.85rem; border-top: 1px solid var(--border-subtle); margin-top: 40px;">
+    <p><strong>Pizzaria do Elieudo</strong> • Jacaúna, Aquiraz/CE</p>
+    <p style="margin-top: 4px;">Pedidos via WhatsApp: (85) 99177-4881</p>
+    <p style="margin-top: 6px; color: var(--amber);">Horário de Atendimento: <span id="footer-hours-text">Terça a Domingo das 18:00 às 23:30</span></p>
+  </footer>
+
+  <!-- Contêiner Invisível de Impressão Térmica (80mm) -->
+  <div id="thermal-receipt"></div>
+
+  <!-- Scripts -->
+  <script src="js/menu-data.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
