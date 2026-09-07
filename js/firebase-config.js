@@ -3,20 +3,30 @@
  * Pizzaria do Elieudo
  */
 
-// Chave para armazenar credenciais do Firebase no navegador do administrador
+// Credenciais Oficiais do Projeto Firebase da Pizzaria do Elieudo
+const DEFAULT_FIREBASE_CONFIG = {
+  projectId: "pizzaria-do-elieudo",
+  appId: "1:515557510318:web:2c5674f1ea49f5737df13f",
+  storageBucket: "pizzaria-do-elieudo.firebasestorage.app",
+  apiKey: "AIzaSyD-tBrjXuOdCAK1KBQHMclCz6Ji0m5ZQ20",
+  authDomain: "pizzaria-do-elieudo.firebaseapp.com",
+  messagingSenderId: "515557510318",
+  databaseURL: "https://pizzaria-do-elieudo-default-rtdb.firebaseio.com"
+};
+
+// Chave para armazenar credenciais customizadas no navegador do administrador
 const FB_STORAGE_KEY = "elieudo_firebase_config";
 const FB_IMAGES_STORAGE_KEY = "elieudo_custom_images";
 
-// Configuração padrão: se preenchida diretamente aqui ou salva via painel admin
-let firebaseConfig = null;
+let firebaseConfig = DEFAULT_FIREBASE_CONFIG;
 
 try {
   const savedConfig = localStorage.getItem(FB_STORAGE_KEY);
   if (savedConfig) {
-    firebaseConfig = JSON.parse(savedConfig);
+    firebaseConfig = Object.assign({}, DEFAULT_FIREBASE_CONFIG, JSON.parse(savedConfig));
   }
 } catch (e) {
-  console.warn("Nenhuma configuração prévia do Firebase encontrada no armazenamento local.");
+  firebaseConfig = DEFAULT_FIREBASE_CONFIG;
 }
 
 // Objeto de controle de inicialização
