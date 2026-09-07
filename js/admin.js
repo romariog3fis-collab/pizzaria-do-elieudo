@@ -16,7 +16,10 @@ const adminState = {
     openingHours: "Terça a Domingo das 18:00 às 23:30",
     closedMessage: "Nosso forno abre hoje às 18:00! Fique à vontade para conferir nosso cardápio."
   },
-  modalStatusChoice: true
+  modalStatusChoice: true,
+  customImages: {},
+  editingItemId: null,
+  currentTempImage: null
 };
 
 // Formatação BRL
@@ -32,10 +35,11 @@ document.addEventListener("DOMContentLoaded", () => {
   renderKanban();
   updateMetrics();
   renderStockManager();
-  setupBroadcastListener();
+  setupCloudAndBroadcastSync();
   setupAdminControls();
   setupTabNavigation();
   setupStockControls();
+  updateCloudStatusIndicator();
 });
 
 // Carregar pedidos do LocalStorage
@@ -54,29 +58,51 @@ function saveOrders() {
   localStorage.setItem("elieudo_orders_db", JSON.stringify(adminState.orders));
 }
 
-// Escuta em tempo real de novos pedidos via BroadcastChannel
-function setupBroadcastListener() {
-  if (window.BroadcastChannel) {
-    const channel = new BroadcastChannel("elieudo_orders_bus");
-    channel.onmessage = (event) => {
-      if (event.data && event.data.type === "NEW_ORDER") {
-        playNotificationBeep();
-        loadOrders();
+// Sincronização em Tempo Real (Firebase Nuvem + Broadcast Local)
+function setupCloudAndBroadcastSync() {
+  if (typeof fbListenOrders === "function") {
+    fbListenOrders(
+      (ordersList) => {
+        adminState.orders = ordersList || [];
         renderKanban();
         updateMetrics();
+      },
+      (newOrder) => {
+        playNotificationBeep();
+        showStockBanner(`🔔 Novo Pedido recebido: ${newOrder.id} - ${newOrder.customer ? newOrder.customer.name : ''}!`, "success");
       }
-    };
+    );
   }
 
-  // Fallback com window storage event
-  window.addEventListener("storage", (e) => {
-    if (e.key === "elieudo_orders_db") {
-      loadOrders();
-      renderKanban();
-      updateMetrics();
-    }
-  });
+  // Ouvir fotos personalizadas
+  if (typeof fbListenItemImages === "function") {
+    fbListenItemImages((images) => {
+      adminState.customImages = images || {};
+      renderStockGrid();
+    });
+  }
+
+  // Ouvir status de estoque
+  if (typeof fbListenOutOfStock === "function") {
+    fbListenOutOfStock((list) => {
+      if (list && Array.isArray(list)) {
+        adminState.outOfStock = list;
+        updateStockCounters();
+      }
+    });
+  }
+
+  // Ouvir status da loja
+  if (typeof fbListenStoreSettings === "function") {
+    fbListenStoreSettings((settings) => {
+      if (settings) {
+        adminState.storeSettings = settings;
+        updateStoreHeaderButton();
+      }
+    });
+  }
 }
+
 
 // Emissão de som de alerta de novo pedido usando Web Audio API (sem arquivos externos)
 function playNotificationBeep() {
@@ -219,6 +245,9 @@ function changeOrderStatus(orderId, newStatus) {
   if (order) {
     order.status = newStatus;
     saveOrders();
+    if (typeof fbUpdateOrderStatus === "function") {
+      fbUpdateOrderStatus(orderId, newStatus);
+    }
     renderKanban();
     updateMetrics();
   }
@@ -362,6 +391,9 @@ function setupAdminControls() {
 
       adminState.orders.unshift(mockOrder);
       saveOrders();
+      if (typeof fbSaveOrder === "function") {
+        fbSaveOrder(mockOrder);
+      }
       playNotificationBeep();
       renderKanban();
       updateMetrics();
@@ -374,6 +406,9 @@ function setupAdminControls() {
       if (confirm("Deseja limpar todos os pedidos do histórico?")) {
         adminState.orders = [];
         saveOrders();
+        if (typeof fbClearAllOrders === "function") {
+          fbClearAllOrders();
+        }
         renderKanban();
         updateMetrics();
       }
@@ -395,9 +430,12 @@ function loadStockStatus() {
   }
 }
 
-// Salvar lista de itens esgotados e notificar cardápio do cliente via BroadcastChannel
+// Salvar lista de itens esgotados e notificar cardápio do cliente via BroadcastChannel & Firebase
 function saveStockStatus() {
   localStorage.setItem("elieudo_out_of_stock", JSON.stringify(adminState.outOfStock));
+  if (typeof fbSaveOutOfStock === "function") {
+    fbSaveOutOfStock(adminState.outOfStock);
+  }
   if (window.BroadcastChannel) {
     const channel = new BroadcastChannel("elieudo_stock_bus");
     channel.postMessage({ type: "STOCK_UPDATED", outOfStock: adminState.outOfStock });
@@ -603,6 +641,9 @@ function renderStockGrid() {
     const cat = MENU_DATA.categories.find(c => c.id === item.category);
     const catName = cat ? `${cat.icon} ${cat.name}` : item.category;
 
+    const hasCustomImg = !!(adminState.customImages && adminState.customImages[item.id]);
+    const displayImg = hasCustomImg ? adminState.customImages[item.id] : (item.image || 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=400');
+
     let priceLabel = "";
     if (item.prices) {
       priceLabel = `A partir de ${formatBRL(item.prices.M)}`;
@@ -613,7 +654,8 @@ function renderStockGrid() {
     return `
       <div class="stock-card ${isOut ? 'is-out-of-stock' : ''}" data-id="${item.id}">
         <div class="stock-card-thumb">
-          <img src="${item.image || 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=400'}" alt="${item.name}" loading="lazy" />
+          <img src="${displayImg}" alt="${item.name}" loading="lazy" />
+          ${hasCustomImg ? `<span class="badge-custom-photo">📸 Foto Real</span>` : ''}
           <span class="stock-status-pill ${isOut ? 'pill-out' : 'pill-available'}">
             ${isOut ? '⛔ Esgotado' : '✅ Disponível'}
           </span>
@@ -626,16 +668,21 @@ function renderStockGrid() {
           <h3 class="stock-card-name">${item.name}</h3>
           <p class="stock-card-desc">${item.description || 'Sem descrição cadastrada.'}</p>
           <div class="stock-card-footer">
-            <button class="btn-stock-toggle ${isOut ? 'btn-make-available' : 'btn-make-out'}" 
-                    data-id="${item.id}">
-              ${isOut ? `
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                <span>Reativar Sabor</span>
-              ` : `
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
-                <span>Esgotar Sabor</span>
-              `}
-            </button>
+            <div class="stock-card-actions">
+              <button type="button" class="btn-edit-photo" onclick="openPhotoModal('${item.id}')" title="Alterar foto da pizza">
+                <span>📸 Trocar Foto</span>
+              </button>
+              <button class="btn-stock-toggle ${isOut ? 'btn-make-available' : 'btn-make-out'}" 
+                      data-id="${item.id}">
+                ${isOut ? `
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  <span>Reativar</span>
+                ` : `
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+                  <span>Esgotar</span>
+                `}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -791,4 +838,245 @@ function saveHoursSettings() {
   showStockBanner("💾 Horários e configurações da loja salvos com sucesso!", "success");
 }
 window.saveHoursSettings = saveHoursSettings;
+
+// ============================================================
+// GESTÃO DE FOTOS DAS PIZZAS PELO ADMINISTRADOR
+// ============================================================
+
+// Abrir modal de edição de foto
+function openPhotoModal(itemId) {
+  const item = (MENU_DATA.items || []).find(i => i.id === itemId);
+  if (!item) return;
+
+  adminState.editingItemId = itemId;
+  const currentImg = (adminState.customImages && adminState.customImages[itemId]) || item.image || "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=400";
+  adminState.currentTempImage = currentImg;
+
+  const titleEl = document.getElementById("photo-modal-item-title");
+  const previewImg = document.getElementById("photo-modal-preview-img");
+  const statusText = document.getElementById("photo-modal-status-text");
+  const inputUrl = document.getElementById("input-photo-url");
+  const inputFile = document.getElementById("input-photo-file");
+
+  if (titleEl) titleEl.innerText = `Trocar Foto: ${item.name}`;
+  if (previewImg) previewImg.src = currentImg;
+  if (statusText) {
+    const isCustom = adminState.customImages && adminState.customImages[itemId];
+    statusText.innerText = isCustom ? "📸 Foto personalizada ativa" : "🖼️ Foto padrão original";
+  }
+  if (inputUrl) inputUrl.value = "";
+  if (inputFile) inputFile.value = "";
+
+  const modal = document.getElementById("photo-edit-modal");
+  if (modal) modal.style.display = "flex";
+}
+window.openPhotoModal = openPhotoModal;
+
+function closePhotoModal() {
+  const modal = document.getElementById("photo-edit-modal");
+  if (modal) modal.style.display = "none";
+  adminState.editingItemId = null;
+  adminState.currentTempImage = null;
+}
+window.closePhotoModal = closePhotoModal;
+
+// Compressão de imagem no navegador usando Canvas para garantir leveza e alta velocidade
+function compressImage(file, maxWidth = 800, maxHeight = 600, quality = 0.78) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+        if (height > maxHeight) {
+          width = Math.round((width * maxHeight) / height);
+          height = maxHeight;
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const dataUrl = canvas.toDataURL("image/jpeg", quality);
+        resolve(dataUrl);
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+// Quando o usuário seleciona um arquivo da câmera ou galeria
+async function handlePhotoFileSelected(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+
+  const statusText = document.getElementById("photo-modal-status-text");
+  const previewImg = document.getElementById("photo-modal-preview-img");
+
+  if (statusText) statusText.innerText = "⏳ Otimizando e preparando foto...";
+
+  try {
+    const compressedDataUrl = await compressImage(file, 800, 600, 0.78);
+    adminState.currentTempImage = compressedDataUrl;
+    if (previewImg) previewImg.src = compressedDataUrl;
+    if (statusText) statusText.innerText = "✅ Foto pronta para salvar (otimizada)";
+  } catch (err) {
+    console.error("Erro ao comprimir imagem:", err);
+    if (statusText) statusText.innerText = "❌ Falha ao processar arquivo.";
+  }
+}
+window.handlePhotoFileSelected = handlePhotoFileSelected;
+
+// Quando o usuário cola uma URL de foto
+function handlePhotoUrlInput(event) {
+  const url = event.target.value.trim();
+  if (!url) return;
+
+  const previewImg = document.getElementById("photo-modal-preview-img");
+  const statusText = document.getElementById("photo-modal-status-text");
+
+  adminState.currentTempImage = url;
+  if (previewImg) previewImg.src = url;
+  if (statusText) statusText.innerText = "🔗 Link de imagem carregado";
+}
+window.handlePhotoUrlInput = handlePhotoUrlInput;
+
+// Salvar foto personalizada
+async function saveCustomPhoto() {
+  if (!adminState.editingItemId || !adminState.currentTempImage) {
+    alert("Por favor, selecione uma foto primeiro!");
+    return;
+  }
+
+  const itemId = adminState.editingItemId;
+  const newImg = adminState.currentTempImage;
+
+  if (typeof fbSaveItemImage === "function") {
+    await fbSaveItemImage(itemId, newImg);
+  }
+
+  adminState.customImages[itemId] = newImg;
+  renderStockGrid();
+  closePhotoModal();
+  showStockBanner("📸 Foto atualizada com sucesso no cardápio!", "success");
+}
+window.saveCustomPhoto = saveCustomPhoto;
+
+// Restaurar foto padrão
+async function restoreDefaultPhoto() {
+  if (!adminState.editingItemId) return;
+  const itemId = adminState.editingItemId;
+
+  if (confirm("Deseja remover a foto personalizada e voltar para a foto padrão do cardápio?")) {
+    if (typeof fbRemoveItemImage === "function") {
+      await fbRemoveItemImage(itemId);
+    }
+    if (adminState.customImages) {
+      delete adminState.customImages[itemId];
+    }
+    renderStockGrid();
+    closePhotoModal();
+    showStockBanner("🔄 Foto restaurada para o padrão original.", "success");
+  }
+}
+window.restoreDefaultPhoto = restoreDefaultPhoto;
+
+// ============================================================
+// CONFIGURAÇÃO DO FIREBASE (NUVEM EM TEMPO REAL)
+// ============================================================
+
+function updateCloudStatusIndicator() {
+  const btn = document.getElementById("btn-cloud-status");
+  const ind = document.getElementById("cloud-status-indicator");
+  if (!ind) return;
+
+  const isConnected = typeof fbIsConnected === "function" && fbIsConnected();
+  if (isConnected) {
+    ind.innerHTML = "🟢 Nuvem Conectada";
+    if (btn) btn.style.borderColor = "rgba(16, 185, 129, 0.4)";
+  } else {
+    ind.innerHTML = "☁️ Nuvem / Config";
+  }
+}
+
+function openFirebaseModal() {
+  const modal = document.getElementById("firebase-setup-modal");
+  const banner = document.getElementById("firebase-status-banner");
+  const inputUrl = document.getElementById("input-fb-database-url");
+  const inputKey = document.getElementById("input-fb-api-key");
+  const inputProj = document.getElementById("input-fb-project-id");
+
+  const currentCfg = typeof fbGetFirebaseConfig === "function" ? fbGetFirebaseConfig() : null;
+  const isConnected = typeof fbIsConnected === "function" && fbIsConnected();
+
+  if (banner) {
+    if (isConnected) {
+      banner.className = "firebase-status-banner is-connected";
+      banner.innerHTML = "<span>🟢 Firebase conectado e sincronizando pedidos em tempo real.</span>";
+    } else {
+      banner.className = "firebase-status-banner is-offline";
+      banner.innerHTML = "<span>🟡 Modo Local ativo. Configure seu Realtime Database abaixo para sincronizar entre aparelhos diferentes.</span>";
+    }
+  }
+
+  if (currentCfg) {
+    if (inputUrl) inputUrl.value = currentCfg.databaseURL || "";
+    if (inputKey) inputKey.value = currentCfg.apiKey || "";
+    if (inputProj) inputProj.value = currentCfg.projectId || "";
+  }
+
+  if (modal) modal.style.display = "flex";
+}
+window.openFirebaseModal = openFirebaseModal;
+
+function closeFirebaseModal() {
+  const modal = document.getElementById("firebase-setup-modal");
+  if (modal) modal.style.display = "none";
+}
+window.closeFirebaseModal = closeFirebaseModal;
+
+function saveFirebaseSettingsFromModal() {
+  const inputUrl = document.getElementById("input-fb-database-url");
+  const inputKey = document.getElementById("input-fb-api-key");
+  const inputProj = document.getElementById("input-fb-project-id");
+
+  const dbUrl = inputUrl ? inputUrl.value.trim() : "";
+  const apiKey = inputKey ? inputKey.value.trim() : "";
+  const projId = inputProj ? inputProj.value.trim() : "";
+
+  if (!dbUrl || !apiKey) {
+    alert("Por favor, preencha pelo menos a Database URL e a API Key do seu Firebase!");
+    return;
+  }
+
+  const configObj = {
+    apiKey: apiKey,
+    databaseURL: dbUrl,
+    projectId: projId || "pizzaria-elieudo"
+  };
+
+  const success = typeof fbSaveFirebaseConfig === "function" ? fbSaveFirebaseConfig(configObj) : false;
+  if (success) {
+    alert("Conexão com Firebase iniciada com sucesso!");
+    updateCloudStatusIndicator();
+    closeFirebaseModal();
+    setupCloudAndBroadcastSync();
+  } else {
+    alert("Configuração salva. Caso não conecte de imediato, verifique a URL e chave do Firebase.");
+    updateCloudStatusIndicator();
+    closeFirebaseModal();
+  }
+}
+window.saveFirebaseSettingsFromModal = saveFirebaseSettingsFromModal;
 

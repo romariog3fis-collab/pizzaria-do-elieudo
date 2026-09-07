@@ -32,6 +32,11 @@
         <span id="header-store-text">🟢 Loja Aberta</span>
       </button>
 
+      <!-- Botão de Sincronização em Nuvem / Firebase -->
+      <button class="btn-admin" id="btn-cloud-status" onclick="openFirebaseModal()" title="Status da sincronização em nuvem e pedidos em tempo real">
+        <span id="cloud-status-indicator">☁️ Nuvem</span>
+      </button>
+
       <!-- Botão para Personalizar Horários de Funcionamento -->
       <button class="btn-admin" id="btn-open-hours-modal" onclick="openHoursModal()" title="Personalizar Horários e Mensagens da Loja">
         <span>🕒 Horários</span>
@@ -230,10 +235,127 @@
     </div>
   </div>
 
+  <!-- Modal de Troca de Foto da Pizza / Produto -->
+  <div class="admin-modal-overlay" id="photo-edit-modal" style="display: none;">
+    <div class="admin-modal-box modal-photo-box">
+      <div class="admin-modal-header">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 1.6rem;">📸</span>
+          <div>
+            <h3 id="photo-modal-item-title">Trocar Foto da Pizza</h3>
+            <span style="font-size: 0.8rem; color: var(--text-muted);">Tire uma foto ou escolha um arquivo. A foto será otimizada e atualizada no cardápio de todos os clientes.</span>
+          </div>
+        </div>
+        <button class="btn-close-modal" onclick="closePhotoModal()">&times;</button>
+      </div>
+
+      <div class="admin-modal-body">
+        <!-- Preview da Imagem -->
+        <div class="photo-preview-container">
+          <div class="photo-preview-wrap">
+            <img id="photo-modal-preview-img" src="" alt="Pré-visualização" />
+          </div>
+          <span class="photo-preview-status" id="photo-modal-status-text">Foto atual do cardápio</span>
+        </div>
+
+        <!-- Opções de Upload -->
+        <div class="photo-upload-options">
+          <div class="photo-dropzone" onclick="document.getElementById('input-photo-file').click()">
+            <span style="font-size: 2rem;">📷</span>
+            <strong>Tirar Foto com a Câmera ou Enviar do Aparelho</strong>
+            <span style="font-size: 0.8rem; color: var(--text-muted);">Otimização automática de tamanho e peso</span>
+            <input type="file" id="input-photo-file" accept="image/*" style="display: none;" onchange="handlePhotoFileSelected(event)" />
+          </div>
+
+          <div style="text-align: center; margin: 12px 0; font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">
+            — OU COLE O LINK DIRETO DE UMA FOTO —
+          </div>
+
+          <div class="form-group-admin" style="margin-bottom: 0;">
+            <input type="url" id="input-photo-url" class="admin-form-input" 
+                   placeholder="https://exemplo.com/foto-pizza.jpg" oninput="handlePhotoUrlInput(event)" />
+          </div>
+        </div>
+      </div>
+
+      <div class="admin-modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+        <button type="button" class="btn-admin" id="btn-restore-default-photo" onclick="restoreDefaultPhoto()" style="color: #ef4444;" title="Voltar para a foto original padrão">
+          🔄 Voltar p/ Foto Padrão
+        </button>
+        <div style="display: flex; gap: 8px;">
+          <button type="button" class="btn-admin" onclick="closePhotoModal()">Cancelar</button>
+          <button type="button" class="btn-admin btn-save-photo" id="btn-save-photo" onclick="saveCustomPhoto()">
+            💾 Salvar Foto no Cardápio
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Configuração do Firebase / Nuvem -->
+  <div class="admin-modal-overlay" id="firebase-setup-modal" style="display: none;">
+    <div class="admin-modal-box">
+      <div class="admin-modal-header">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 1.6rem;">☁️</span>
+          <div>
+            <h3>Conectar Pedidos em Nuvem (Firebase)</h3>
+            <span style="font-size: 0.8rem; color: var(--text-muted);">Sincronização em tempo real entre o celular dos clientes e o painel da cozinha</span>
+          </div>
+        </div>
+        <button class="btn-close-modal" onclick="closeFirebaseModal()">&times;</button>
+      </div>
+
+      <div class="admin-modal-body">
+        <div id="firebase-status-banner" class="firebase-status-banner">
+          <!-- Injetado dinamicamente -->
+        </div>
+
+        <div class="form-group-admin">
+          <label for="input-fb-database-url">Database URL do Firebase:</label>
+          <input type="text" id="input-fb-database-url" class="admin-form-input" 
+                 placeholder="Ex: https://pizzaria-elieudo-default-rtdb.firebaseio.com" />
+          <span class="admin-input-hint">URL do seu Realtime Database criado no console do Firebase.</span>
+        </div>
+
+        <div class="form-group-admin">
+          <label for="input-fb-api-key">API Key do Firebase:</label>
+          <input type="text" id="input-fb-api-key" class="admin-form-input" 
+                 placeholder="Ex: AIzaSyA123456..." />
+        </div>
+
+        <div class="form-group-admin">
+          <label for="input-fb-project-id">Project ID:</label>
+          <input type="text" id="input-fb-project-id" class="admin-form-input" 
+                 placeholder="Ex: pizzaria-elieudo" />
+        </div>
+
+        <div class="fb-help-card">
+          <strong>💡 Como obter suas credenciais em 2 minutos (Grátis):</strong>
+          <ol style="margin: 8px 0 0 16px; font-size: 0.82rem; line-height: 1.5; color: var(--text-muted);">
+            <li>Acesse <a href="https://console.firebase.google.com/" target="_blank" style="color: #ef4444; text-decoration: underline;">console.firebase.google.com</a> e crie um projeto gratuito.</li>
+            <li>No menu lateral, clique em <strong>Realtime Database</strong> ➔ Criar Banco de Dados (Modo de Teste).</li>
+            <li>Em Configurações do Projeto (ícone da engrenagem ⚙️), copie a <strong>apiKey</strong>, <strong>databaseURL</strong> e <strong>projectId</strong> e cole acima.</li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="admin-modal-footer">
+        <button type="button" class="btn-admin" onclick="closeFirebaseModal()">Fechar</button>
+        <button type="button" class="btn-admin btn-save-hours" onclick="saveFirebaseSettingsFromModal()">
+          🔗 Conectar Nuvem
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Contêiner Invisível de Impressão Térmica 80mm -->
   <div id="admin-thermal-receipt"></div>
 
-  <!-- Scripts -->
+  <!-- Scripts: Firebase SDK (compat CDN) + Config + Menu Data + Admin Logic -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+  <script src="js/firebase-config.js"></script>
   <script src="js/menu-data.js"></script>
   <script src="js/admin.js"></script>
 </body>

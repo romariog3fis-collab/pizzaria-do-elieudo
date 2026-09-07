@@ -32,6 +32,7 @@ function formatMoney(amount) {
 
 // Inicialização
 document.addEventListener("DOMContentLoaded", () => {
+  setupRealtimeListeners();
   renderCategoryTabs();
   renderMenu();
   setupEventListeners();
@@ -39,6 +40,44 @@ document.addEventListener("DOMContentLoaded", () => {
   updateCartUI();
   updateStoreStatusUI();
 });
+
+// Sincronização em Tempo Real (Firebase & Fallback Local)
+function setupRealtimeListeners() {
+  // 1. Escuta fotos reais atualizadas no Firebase
+  if (typeof fbListenItemImages === "function") {
+    fbListenItemImages((customImages) => {
+      if (customImages && typeof customImages === "object") {
+        let changed = false;
+        Object.keys(customImages).forEach(itemId => {
+          const item = MENU_DATA.items.find(i => i.id === itemId);
+          if (item && item.image !== customImages[itemId]) {
+            item.image = customImages[itemId];
+            changed = true;
+          }
+        });
+        if (changed) {
+          renderMenu();
+        }
+      }
+    });
+  }
+
+  // 2. Escuta status da loja em tempo real
+  if (typeof fbListenStoreSettings === "function") {
+    fbListenStoreSettings((settings) => {
+      if (settings) {
+        updateStoreStatusUI();
+      }
+    });
+  }
+
+  // 3. Escuta sabores esgotados em tempo real
+  if (typeof fbListenOutOfStock === "function") {
+    fbListenOutOfStock((outList) => {
+      renderMenu();
+    });
+  }
+}
 
 // Renderização das Abas de Categoria com Looping Infinito Suave
 function renderCategoryTabs() {
@@ -818,14 +857,19 @@ function submitOrderViaWhatsApp() {
     existingOrders.unshift(newOrderRecord);
     localStorage.setItem("elieudo_orders_db", JSON.stringify(existingOrders));
 
-    // Notificar painel administrativo em tempo real
+    // Salvar no Firebase em tempo real (para a cozinha do Elieudo receber na mesma hora)
+    if (typeof fbSaveOrder === "function") {
+      fbSaveOrder(newOrderRecord);
+    }
+
+    // Notificar painel administrativo em tempo real (fallback local)
     if (window.BroadcastChannel) {
       const channel = new BroadcastChannel("elieudo_orders_bus");
       channel.postMessage({ type: "NEW_ORDER", order: newOrderRecord });
       channel.close();
     }
   } catch (e) {
-    console.error("Erro ao salvar pedido localmente:", e);
+    console.error("Erro ao salvar pedido:", e);
   }
 
   // Prepara recibo térmico antes de redirecionar
