@@ -870,6 +870,7 @@ body {
   border-radius: 14px;
   width: 100%;
   max-width: 540px;
+  max-height: 90vh;
   box-shadow: 0 12px 40px rgba(0,0,0,0.7);
   display: flex;
   flex-direction: column;
@@ -889,6 +890,7 @@ body {
   justify-content: space-between;
   align-items: center;
   background: #14171f;
+  flex-shrink: 0;
 }
 
 .admin-modal-header h3 {
@@ -918,6 +920,29 @@ body {
   display: flex;
   flex-direction: column;
   gap: 18px;
+  overflow-y: auto;
+  max-height: calc(90vh - 130px);
+}
+
+.admin-modal-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.admin-modal-body::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.admin-modal-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+.admin-modal-body::-webkit-scrollbar-thumb:hover {
+  background: #f59e0b;
+}
+
+.admin-modal-footer {
+  flex-shrink: 0;
 }
 
 .form-group-admin {
