@@ -355,3 +355,88 @@ function fbListenOutOfStock(callback) {
     });
   }
 }
+
+// ==========================================
+// CUPONS DE DESCONTO EM TEMPO REAL
+// ==========================================
+
+const DEFAULT_COUPONS = [
+  { code: "BEMVINDO", type: "percent", value: 10, minOrder: 30, active: true, desc: "10% de desconto na primeira compra" },
+  { code: "ELIEUDO5", type: "fixed", value: 5, minOrder: 40, active: true, desc: "R$ 5,00 OFF em pedidos acima de R$ 40" }
+];
+
+function fbSaveCoupons(couponsList) {
+  try {
+    localStorage.setItem("elieudo_coupons_db", JSON.stringify(couponsList));
+  } catch (e) {}
+
+  if (isFirebaseReady && fbDb) {
+    return fbDb.ref("coupons").set(couponsList);
+  }
+  return Promise.resolve();
+}
+
+function fbListenCoupons(callback) {
+  try {
+    const local = JSON.parse(localStorage.getItem("elieudo_coupons_db") || "null");
+    if (local && Array.isArray(local) && local.length > 0) {
+      if (typeof callback === "function") callback(local);
+    } else {
+      if (typeof callback === "function") callback(DEFAULT_COUPONS);
+    }
+  } catch (e) {
+    if (typeof callback === "function") callback(DEFAULT_COUPONS);
+  }
+
+  if (isFirebaseReady && fbDb) {
+    fbDb.ref("coupons").on("value", (snapshot) => {
+      const val = snapshot.val();
+      if (val && Array.isArray(val)) {
+        try {
+          localStorage.setItem("elieudo_coupons_db", JSON.stringify(val));
+        } catch (e) {}
+        if (typeof callback === "function") callback(val);
+      } else if (val === null) {
+        // Se ainda não foi inicializado na nuvem, inicializa com os padrões
+        fbDb.ref("coupons").set(DEFAULT_COUPONS);
+      }
+    });
+  }
+}
+
+// ==========================================
+// PIN DE SEGURANÇA DO ADMIN
+// ==========================================
+
+const DEFAULT_ADMIN_PIN = "1234";
+
+function fbSaveAdminPin(newPin) {
+  try {
+    localStorage.setItem("elieudo_admin_pin", String(newPin));
+  } catch (e) {}
+
+  if (isFirebaseReady && fbDb) {
+    return fbDb.ref("admin_auth/pin").set(String(newPin));
+  }
+  return Promise.resolve();
+}
+
+function fbListenAdminPin(callback) {
+  try {
+    const local = localStorage.getItem("elieudo_admin_pin") || DEFAULT_ADMIN_PIN;
+    if (typeof callback === "function") callback(local);
+  } catch (e) {}
+
+  if (isFirebaseReady && fbDb) {
+    fbDb.ref("admin_auth/pin").on("value", (snapshot) => {
+      const val = snapshot.val();
+      if (val) {
+        try {
+          localStorage.setItem("elieudo_admin_pin", String(val));
+        } catch (e) {}
+        if (typeof callback === "function") callback(String(val));
+      }
+    });
+  }
+}
+

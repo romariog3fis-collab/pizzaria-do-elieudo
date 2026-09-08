@@ -22,7 +22,10 @@ const appState = {
     reference: "",
     paymentMethod: "pix",
     changeFor: ""
-  }
+  },
+  // Frente 3: Cupom de Desconto
+  appliedCoupon: null,
+  availableCoupons: []
 };
 
 // Formatação BRL
@@ -75,6 +78,16 @@ function setupRealtimeListeners() {
   if (typeof fbListenOutOfStock === "function") {
     fbListenOutOfStock((outList) => {
       renderMenu();
+    });
+  }
+
+  // 4. Escuta cupons de desconto ativos em tempo real (Frente 3)
+  if (typeof fbListenCoupons === "function") {
+    fbListenCoupons((couponsList) => {
+      if (couponsList && Array.isArray(couponsList)) {
+        appState.availableCoupons = couponsList;
+        revalidateAppliedCoupon();
+      }
     });
   }
 }
@@ -710,10 +723,103 @@ function closeCartDrawer() {
   if (drawer) drawer.classList.remove("active");
 }
 
+// ============================================================
+// FRENTE 3: CUPONS DE DESCONTO NO CARRINHO
+// ============================================================
+
+function applyCartCoupon() {
+  const input = document.getElementById("input-cart-coupon");
+  const fb = document.getElementById("coupon-feedback-msg");
+  const code = input ? input.value.toUpperCase().replace(/[^A-Z0-9]/g, "").trim() : "";
+
+  const showErr = (msg) => {
+    if (fb) {
+      fb.style.display = "block";
+      fb.className = "error";
+      fb.innerText = msg;
+    }
+  };
+
+  const showSuccess = (msg) => {
+    if (fb) {
+      fb.style.display = "block";
+      fb.className = "success";
+      fb.innerText = msg;
+    }
+  };
+
+  if (!code) {
+    showErr("Por favor, digite o código do cupom!");
+    return;
+  }
+
+  // Buscar nos cupons disponíveis (Firebase ou LocalStorage)
+  let couponsList = appState.availableCoupons || [];
+  if (couponsList.length === 0) {
+    try {
+      couponsList = JSON.parse(localStorage.getItem("elieudo_coupons_db") || "[]");
+    } catch (e) {}
+  }
+
+  const found = couponsList.find(c => c.code === code);
+
+  if (!found || !found.active) {
+    showErr("❌ Cupom inválido, esgotado ou expirado.");
+    return;
+  }
+
+  const subtotal = getCartSubtotal();
+  if (found.minOrder && subtotal < found.minOrder) {
+    showErr(`⚠️ Este cupom exige um pedido mínimo de ${formatMoney(found.minOrder)} em itens.`);
+    return;
+  }
+
+  appState.appliedCoupon = found;
+  showSuccess(`✅ Cupom ${found.code} aplicado com sucesso!`);
+  renderCartDrawerItems();
+}
+window.applyCartCoupon = applyCartCoupon;
+
+function removeCartCoupon() {
+  appState.appliedCoupon = null;
+  const input = document.getElementById("input-cart-coupon");
+  const fb = document.getElementById("coupon-feedback-msg");
+  if (input) input.value = "";
+  if (fb) {
+    fb.style.display = "none";
+    fb.innerText = "";
+  }
+  renderCartDrawerItems();
+}
+window.removeCartCoupon = removeCartCoupon;
+
+function revalidateAppliedCoupon() {
+  if (!appState.appliedCoupon) return;
+  const subtotal = getCartSubtotal();
+  let couponsList = appState.availableCoupons || [];
+  const current = couponsList.find(c => c.code === appState.appliedCoupon.code);
+
+  if (!current || !current.active || (current.minOrder && subtotal < current.minOrder)) {
+    appState.appliedCoupon = null;
+    const fb = document.getElementById("coupon-feedback-msg");
+    if (fb) {
+      fb.style.display = "block";
+      fb.className = "error";
+      fb.innerText = "⚠️ O cupom aplicado foi removido pois não atende mais às regras.";
+    }
+  } else {
+    appState.appliedCoupon = current;
+  }
+  renderCartDrawerItems();
+}
+
 function renderCartDrawerItems() {
   const container = document.getElementById("cart-items-list");
   const subtotalEl = document.getElementById("checkout-subtotal-val");
   const totalEl = document.getElementById("checkout-total-val");
+  const discountRow = document.getElementById("checkout-discount-row");
+  const discountValEl = document.getElementById("checkout-discount-val");
+  const discountLabelEl = document.getElementById("checkout-discount-label");
 
   if (!container) return;
 
@@ -727,6 +833,7 @@ function renderCartDrawerItems() {
     `;
     if (subtotalEl) subtotalEl.innerText = formatMoney(0);
     if (totalEl) totalEl.innerText = formatMoney(0);
+    if (discountRow) discountRow.style.display = "none";
     return;
   }
 
@@ -748,8 +855,34 @@ function renderCartDrawerItems() {
   `).join("");
 
   const subtotal = getCartSubtotal();
+  let discountAmount = 0;
+
+  if (appState.appliedCoupon) {
+    const c = appState.appliedCoupon;
+    if (c.minOrder && subtotal < c.minOrder) {
+      // Pedido ficou abaixo do mínimo após mudar quantidades
+      appState.appliedCoupon = null;
+      if (discountRow) discountRow.style.display = "none";
+    } else {
+      if (c.type === "percent") {
+        discountAmount = (subtotal * c.value) / 100;
+      } else {
+        discountAmount = Math.min(subtotal, c.value);
+      }
+      if (discountRow) {
+        discountRow.style.display = "flex";
+        if (discountLabelEl) discountLabelEl.innerText = `Desconto (${c.code}):`;
+        if (discountValEl) discountValEl.innerText = `- ${formatMoney(discountAmount)}`;
+      }
+    }
+  } else {
+    if (discountRow) discountRow.style.display = "none";
+  }
+
+  const finalTotal = Math.max(0, subtotal - discountAmount);
+
   if (subtotalEl) subtotalEl.innerText = formatMoney(subtotal);
-  if (totalEl) totalEl.innerText = formatMoney(subtotal);
+  if (totalEl) totalEl.innerText = formatMoney(finalTotal);
 }
 
 // Envio para o WhatsApp
@@ -793,6 +926,19 @@ function submitOrderViaWhatsApp() {
   }
 
   const subtotal = getCartSubtotal();
+  let discountAmount = 0;
+  let couponCode = null;
+
+  if (appState.appliedCoupon) {
+    couponCode = appState.appliedCoupon.code;
+    if (appState.appliedCoupon.type === "percent") {
+      discountAmount = (subtotal * appState.appliedCoupon.value) / 100;
+    } else {
+      discountAmount = Math.min(subtotal, appState.appliedCoupon.value);
+    }
+  }
+
+  const finalTotal = Math.max(0, subtotal - discountAmount);
   const orderId = `#${Math.floor(1000 + Math.random() * 9000)}`;
 
   // Construção da mensagem estruturada
@@ -816,7 +962,11 @@ function submitOrderViaWhatsApp() {
   });
 
   msg += `-------------------------------------------\n`;
-  msg += `💰 *TOTAL A PAGAR: ${formatMoney(subtotal)}*\n`;
+  msg += `Subtotal: ${formatMoney(subtotal)}\n`;
+  if (discountAmount > 0) {
+    msg += `🎟️ *Cupom de Desconto:* ${couponCode} (- ${formatMoney(discountAmount)})\n`;
+  }
+  msg += `💰 *TOTAL A PAGAR: ${formatMoney(finalTotal)}*\n`;
   
   let paymentText = "PIX";
   if (payment === "cartao") paymentText = "Cartão (Levar maquininha na entrega)";
@@ -849,6 +999,9 @@ function submitOrderViaWhatsApp() {
     paymentMethod: paymentText,
     items: JSON.parse(JSON.stringify(appState.cart)),
     subtotal: subtotal,
+    discountAmount: discountAmount,
+    couponCode: couponCode,
+    totalPrice: finalTotal,
     status: "pendente" // pendente -> preparando -> entrega -> finalizado
   };
 

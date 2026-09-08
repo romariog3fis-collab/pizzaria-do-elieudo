@@ -1184,4 +1184,513 @@ body {
   margin-top: 14px;
 }
 
+/* ========================================================
+   FRENTE 2: TELA DE BLOQUEIO POR PIN (LOCKSCREEN)
+   ======================================================== */
+.admin-lockscreen-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 12, 16, 0.94);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.lockscreen-card {
+  background: #14171f;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  width: 100%;
+  max-width: 360px;
+  padding: 28px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  animation: lockModalFade 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes lockModalFade {
+  from { opacity: 0; transform: scale(0.95) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.lockscreen-brand {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.lockscreen-logo {
+  font-size: 2.6rem;
+  display: inline-block;
+  margin-bottom: 6px;
+  filter: drop-shadow(0 4px 10px rgba(245, 158, 11, 0.3));
+}
+
+.lockscreen-brand h2 {
+  font-family: var(--font-heading);
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #fff;
+  margin-bottom: 4px;
+}
+
+.lockscreen-brand h2 span {
+  color: #f59e0b;
+}
+
+.lockscreen-brand p {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.pin-display-wrapper {
+  width: 100%;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.pin-input-field {
+  width: 100%;
+  background: #0d1017;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  padding: 14px;
+  font-size: 1.8rem;
+  text-align: center;
+  letter-spacing: 12px;
+  color: #f59e0b;
+  font-family: monospace;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.pin-input-field:focus {
+  border-color: #f59e0b;
+  box-shadow: 0 0 15px rgba(245, 158, 11, 0.2);
+}
+
+.pin-error-msg {
+  color: #ef4444;
+  font-size: 0.82rem;
+  font-weight: 700;
+  margin-top: 8px;
+  animation: shake 0.3s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-6px); }
+  75% { transform: translateX(6px); }
+}
+
+.pin-keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  width: 100%;
+  margin-bottom: 18px;
+}
+
+.btn-key {
+  background: #1e2330;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 14px;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #f8fafc;
+  cursor: pointer;
+  transition: all 0.15s;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+.btn-key:active {
+  background: #f59e0b;
+  color: #000;
+  transform: scale(0.94);
+}
+
+.btn-key-action {
+  background: #141721;
+  color: #94a3b8;
+  font-size: 1.1rem;
+}
+
+.btn-key-action:hover {
+  background: #272f42;
+  color: #fff;
+}
+
+.btn-unlock-admin {
+  width: 100%;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: #111;
+  border: none;
+  border-radius: 12px;
+  padding: 14px;
+  font-size: 1rem;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(245, 158, 11, 0.3);
+  transition: transform 0.15s;
+}
+
+.btn-unlock-admin:active {
+  transform: scale(0.97);
+}
+
+.lockscreen-footer-hint {
+  margin-top: 14px;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+/* ========================================================
+   FRENTE 3: GERENCIADOR DE CUPONS & PROMOÇÕES
+   ======================================================== */
+.coupons-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.coupon-card {
+  background: var(--admin-card-bg);
+  border: 1px solid var(--admin-border);
+  border-radius: 14px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  position: relative;
+  transition: transform 0.2s, border-color 0.2s;
+}
+
+.coupon-card:hover {
+  border-color: rgba(245, 158, 11, 0.4);
+  transform: translateY(-2px);
+}
+
+.coupon-card.is-inactive {
+  opacity: 0.6;
+  border-color: rgba(239, 68, 68, 0.25);
+  background: rgba(18, 21, 29, 0.5);
+}
+
+.coupon-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.coupon-badge-code {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(217, 119, 6, 0.1));
+  border: 1px dashed #f59e0b;
+  color: #f59e0b;
+  font-family: monospace;
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.coupon-status-badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.coupon-status-badge.active {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.coupon-status-badge.inactive {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.coupon-discount-val {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.coupon-rule-sub {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.coupon-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.coupon-action-btns {
+  display: flex;
+  gap: 8px;
+}
+
+/* ========================================================
+   FRENTE 4: RELATÓRIOS & FECHAMENTO DE CAIXA
+   ======================================================== */
+.reports-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 20px 80px;
+}
+
+.reports-header-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.reports-header-bar h2 {
+  font-family: var(--font-heading);
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.reports-header-bar p {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.reports-top-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.reports-filter-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+
+.report-chip-btn {
+  background: #141721;
+  border: 1px solid var(--admin-border);
+  color: var(--text-muted);
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.report-chip-btn:hover {
+  background: #1f2536;
+  color: #fff;
+}
+
+.report-chip-btn.active {
+  background: #f59e0b;
+  border-color: #f59e0b;
+  color: #111;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+}
+
+.reports-metrics-grid {
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.metric-sub {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
+.reports-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 840px) {
+  .reports-two-col {
+    grid-template-columns: 1fr;
+  }
+}
+
+.report-box {
+  background: var(--admin-card-bg);
+  border: 1px solid var(--admin-border);
+  border-radius: 16px;
+  padding: 24px;
+}
+
+.report-box-title {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #fff;
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.payment-bars-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.payment-bar-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.payment-bar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.payment-bar-track {
+  height: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.payment-bar-fill {
+  height: 100%;
+  border-radius: 8px;
+  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.payment-bar-fill.fill-pix { background: #10b981; }
+.payment-bar-fill.fill-card { background: #3b82f6; }
+.payment-bar-fill.fill-cash { background: #f59e0b; }
+
+.delivery-split-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.split-stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+}
+
+.split-stat-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.split-stat-val {
+  font-weight: 800;
+  font-size: 1.1rem;
+}
+
+.ranking-tables-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 768px) {
+  .ranking-tables-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ranking-col-title {
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 6px;
+}
+
+.ranking-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ranking-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.ranking-pos {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: #1f2536;
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #f59e0b;
+  margin-right: 10px;
+  flex-shrink: 0;
+}
+
+.ranking-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  flex: 1;
+}
+
+.ranking-qty {
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+
 

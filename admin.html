@@ -15,6 +15,45 @@
 </head>
 <body>
 
+  <!-- TELA DE BLOQUEIO POR PIN DO ADMIN (FRENTE 2) -->
+  <div id="admin-lockscreen-overlay" class="admin-lockscreen-overlay" style="display: flex;">
+    <div class="lockscreen-card">
+      <div class="lockscreen-brand">
+        <span class="lockscreen-logo">🍕</span>
+        <h2>Pizzaria do <span>Elieudo</span></h2>
+        <p>Acesso Restrito ao Painel Administrativo</p>
+      </div>
+      
+      <div class="pin-display-wrapper">
+        <input type="password" id="admin-pin-input" class="pin-input-field" maxlength="8" placeholder="••••" readonly />
+        <div id="pin-error-msg" class="pin-error-msg" style="display: none;">PIN Incorreto. Tente novamente.</div>
+      </div>
+
+      <div class="pin-keypad">
+        <button type="button" class="btn-key" onclick="appendPinDigit('1')">1</button>
+        <button type="button" class="btn-key" onclick="appendPinDigit('2')">2</button>
+        <button type="button" class="btn-key" onclick="appendPinDigit('3')">3</button>
+        <button type="button" class="btn-key" onclick="appendPinDigit('4')">4</button>
+        <button type="button" class="btn-key" onclick="appendPinDigit('5')">5</button>
+        <button type="button" class="btn-key" onclick="appendPinDigit('6')">6</button>
+        <button type="button" class="btn-key" onclick="appendPinDigit('7')">7</button>
+        <button type="button" class="btn-key" onclick="appendPinDigit('8')">8</button>
+        <button type="button" class="btn-key" onclick="appendPinDigit('9')">9</button>
+        <button type="button" class="btn-key btn-key-action" onclick="clearPin()">C</button>
+        <button type="button" class="btn-key" onclick="appendPinDigit('0')">0</button>
+        <button type="button" class="btn-key btn-key-action" onclick="backspacePin()">⌫</button>
+      </div>
+
+      <button type="button" class="btn-unlock-admin" id="btn-unlock-admin" onclick="verifyAdminPin()">
+        🔓 Desbloquear Painel
+      </button>
+
+      <div class="lockscreen-footer-hint">
+        <span>💡 Dica: PIN padrão <strong>1234</strong> (alterável nas configurações)</span>
+      </div>
+    </div>
+  </div>
+
   <!-- Barra Superior do Painel -->
   <header class="admin-navbar">
     <div class="brand-admin">
@@ -42,12 +81,21 @@
         <span>🕒 Horários</span>
       </button>
 
+      <!-- Botão para Alterar PIN de Segurança -->
+      <button class="btn-admin" id="btn-open-pin-modal" onclick="openChangePinModal()" title="Alterar PIN de Acesso ao Painel">
+        <span>🔑 Senha/PIN</span>
+      </button>
+
       <button class="btn-admin btn-sound-toggle active" id="btn-toggle-sound">🔔 Som Ligado</button>
       <button class="btn-admin" id="btn-simulate-order" title="Gerar pedido de teste">➕ Simular Pedido</button>
       <button class="btn-admin" id="btn-clear-orders" style="color: #ef4444;" title="Limpar lista">🗑️ Limpar</button>
       <a href="index.html" target="_blank" class="btn-admin" style="background: #c21a1a; border-color: #e53935;">
         <span>🌐 Ver Cardápio</span>
       </a>
+      <!-- Botão de Logout -->
+      <button class="btn-admin" id="btn-admin-logout" onclick="logoutAdmin()" style="color: #f87171; border-color: rgba(239, 68, 68, 0.4);" title="Bloquear painel e sair">
+        <span>🔒 Sair</span>
+      </button>
     </div>
   </header>
 
@@ -59,8 +107,15 @@
         <span class="tab-badge-pill" id="badge-orders-count">0</span>
       </button>
       <button class="admin-tab-btn" id="tab-btn-stock">
-        <span>🍕 Disponibilidade & Esgotamento de Sabores</span>
+        <span>🍕 Disponibilidade & Esgotamento</span>
         <span class="tab-badge-pill badge-warning" id="badge-stock-out-count">0 esgotados</span>
+      </button>
+      <button class="admin-tab-btn" id="tab-btn-coupons">
+        <span>🎟️ Cupons & Promoções</span>
+        <span class="tab-badge-pill" id="badge-coupons-count">0 ativos</span>
+      </button>
+      <button class="admin-tab-btn" id="tab-btn-reports">
+        <span>📊 Relatórios & Caixa</span>
       </button>
     </div>
   </nav>
@@ -183,6 +238,126 @@
       </div>
     </div>
   </div>
+
+  <!-- VIEW 3: CUPONS & PROMOÇÕES (FRENTE 3) -->
+  <div id="view-coupons" style="display: none;">
+    <div class="stock-manager-container">
+      <div class="stock-manager-header">
+        <div>
+          <h2>Gerenciador de Cupons & Descontos</h2>
+          <p>Crie códigos promocionais para aumentar as vendas. Os clientes podem digitar os códigos diretamente no carrinho de compras.</p>
+        </div>
+        <div>
+          <button class="btn-admin btn-save-photo" onclick="openCreateCouponModal()">
+            <span>➕ Novo Cupom</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Banner de Feedback -->
+      <div id="coupon-notification-banner" style="display: none;"></div>
+
+      <!-- Grid de Cupons -->
+      <div class="coupons-grid" id="coupons-container">
+        <!-- Injetado dinamicamente via admin.js -->
+      </div>
+    </div>
+  </div>
+
+  <!-- VIEW 4: RELATÓRIOS & FECHAMENTO DE CAIXA (FRENTE 4) -->
+  <div id="view-reports" style="display: none;">
+    <div class="reports-container">
+      
+      <!-- Cabeçalho de Relatórios & Filtros de Período -->
+      <div class="reports-header-bar">
+        <div>
+          <h2>Relatórios de Vendas & Fechamento de Caixa</h2>
+          <p>Resumo financeiro das vendas, métodos de pagamento mais usados e produtos campeões.</p>
+        </div>
+        <div class="reports-top-actions">
+          <button class="btn-admin" onclick="printCashClosingReceipt()" style="background: #2563eb; border-color: #3b82f6; color: #fff;" title="Imprimir fechamento em impressora térmica">
+            <span>🧾 Imprimir Fechamento</span>
+          </button>
+          <button class="btn-admin" onclick="copyClosingToWhatsApp()" style="background: #059669; border-color: #10b981; color: #fff;" title="Copiar resumo formatado para o WhatsApp">
+            <span>📲 Copiar p/ WhatsApp</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Filtros de Período -->
+      <div class="reports-filter-chips">
+        <button class="report-chip-btn active" data-period="today" onclick="setReportsPeriod('today')">Hoje</button>
+        <button class="report-chip-btn" data-period="yesterday" onclick="setReportsPeriod('yesterday')">Ontem</button>
+        <button class="report-chip-btn" data-period="week" onclick="setReportsPeriod('week')">Últimos 7 Dias</button>
+        <button class="report-chip-btn" data-period="month" onclick="setReportsPeriod('month')">Este Mês</button>
+        <button class="report-chip-btn" data-period="all" onclick="setReportsPeriod('all')">Todo o Histórico</button>
+      </div>
+
+      <!-- KPIs Financeiros -->
+      <div class="metrics-grid reports-metrics-grid">
+        <div class="metric-card">
+          <span class="metric-label">Faturamento Total</span>
+          <span class="metric-val text-green" id="rep-total-revenue">R$ 0,00</span>
+          <span class="metric-sub" id="rep-orders-count-sub">0 pedidos concluídos</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-label">Ticket Médio</span>
+          <span class="metric-val" style="color: #60a5fa;" id="rep-average-ticket">R$ 0,00</span>
+          <span class="metric-sub">Por pedido finalizado</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-label">Descontos em Cupons</span>
+          <span class="metric-val" style="color: #f87171;" id="rep-total-discounts">R$ 0,00</span>
+          <span class="metric-sub" id="rep-coupons-used-sub">0 cupons aplicados</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-label">Taxa de Entrega Arrecadada</span>
+          <span class="metric-val" style="color: #fbbf24;" id="rep-delivery-total">R$ 0,00</span>
+          <span class="metric-sub" id="rep-delivery-count-sub">0 entregas realizadas</span>
+        </div>
+      </div>
+
+      <!-- Distribuição de Pagamentos e Modalidades -->
+      <div class="reports-two-col">
+        <!-- Formas de Pagamento -->
+        <div class="report-box">
+          <h3 class="report-box-title">💳 Formas de Pagamento</h3>
+          <div class="payment-bars-list" id="rep-payment-methods-list">
+            <!-- Injetado dinamicamente -->
+          </div>
+        </div>
+
+        <!-- Tipo de Pedido (Delivery vs Balcão) -->
+        <div class="report-box">
+          <h3 class="report-box-title">🛵 Modalidade de Atendimento</h3>
+          <div class="delivery-split-card" id="rep-delivery-split-card">
+            <!-- Injetado dinamicamente -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Top Produtos Mais Vendidos -->
+      <div class="report-box" style="margin-top: 20px;">
+        <h3 class="report-box-title">🏆 Campeões de Venda no Período</h3>
+        <div class="ranking-tables-grid">
+          <div>
+            <h4 class="ranking-col-title">🍕 Top Sabores de Pizzas</h4>
+            <div id="rep-top-pizzas-list" class="ranking-list">
+              <!-- Injetado dinamicamente -->
+            </div>
+          </div>
+          <div>
+            <h4 class="ranking-col-title">🥤 Bebidas, Esfihas & Outros</h4>
+            <div id="rep-top-others-list" class="ranking-list">
+              <!-- Injetado dinamicamente -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
 
   <!-- Modal de Configuração de Horários & Loja -->
   <div class="admin-modal-overlay" id="hours-settings-modal" style="display: none;">
@@ -344,6 +519,118 @@
         <button type="button" class="btn-admin" onclick="closeFirebaseModal()">Fechar</button>
         <button type="button" class="btn-admin btn-save-hours" onclick="saveFirebaseSettingsFromModal()">
           🔗 Conectar Nuvem
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Criar / Editar Cupom (FRENTE 3) -->
+  <div class="admin-modal-overlay" id="coupon-edit-modal" style="display: none;">
+    <div class="admin-modal-box">
+      <div class="admin-modal-header">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 1.6rem;">🎟️</span>
+          <div>
+            <h3 id="coupon-modal-title">Criar Novo Cupom</h3>
+            <span style="font-size: 0.8rem; color: var(--text-muted);">Defina o código, o valor do desconto e o pedido mínimo</span>
+          </div>
+        </div>
+        <button class="btn-close-modal" onclick="closeCouponModal()">&times;</button>
+      </div>
+
+      <div class="admin-modal-body">
+        <input type="hidden" id="input-coupon-original-code" value="" />
+
+        <div class="form-group-admin">
+          <label for="input-coupon-code">Código do Cupom (em maiúsculas):</label>
+          <input type="text" id="input-coupon-code" class="admin-form-input" 
+                 placeholder="Ex: QUINTA10, ELIEUDO5, FAMILIA" 
+                 style="text-transform: uppercase; font-weight: 700; letter-spacing: 1px;" />
+          <span class="admin-input-hint">O cliente digitará esse código no carrinho de compras.</span>
+        </div>
+
+        <div class="form-group-admin">
+          <label>Tipo de Desconto:</label>
+          <div class="store-status-toggle-group">
+            <button type="button" class="btn-status-choice active choice-open" id="choice-coupon-percent" onclick="setCouponTypeChoice('percent')">
+              Porcentagem (%)
+            </button>
+            <button type="button" class="btn-status-choice choice-closed" id="choice-coupon-fixed" onclick="setCouponTypeChoice('fixed')">
+              Valor Fixo (R$)
+            </button>
+          </div>
+        </div>
+
+        <div class="form-group-admin">
+          <label for="input-coupon-value" id="label-coupon-value">Valor do Desconto (%):</label>
+          <input type="number" id="input-coupon-value" class="admin-form-input" placeholder="Ex: 10" min="1" step="0.5" />
+        </div>
+
+        <div class="form-group-admin">
+          <label for="input-coupon-min-order">Pedido Mínimo (R$) (Opcional):</label>
+          <input type="number" id="input-coupon-min-order" class="admin-form-input" placeholder="0 = Sem valor mínimo (Ex: 40.00)" min="0" step="1" />
+          <span class="admin-input-hint">Valor mínimo em itens que o cliente deve atingir para usar o cupom.</span>
+        </div>
+
+        <div class="form-group-admin">
+          <label for="input-coupon-desc">Descrição / Regra (visível para você):</label>
+          <input type="text" id="input-coupon-desc" class="admin-form-input" placeholder="Ex: 10% de desconto para novos clientes" />
+        </div>
+
+        <div class="form-group-admin">
+          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+            <input type="checkbox" id="input-coupon-active" checked style="width: 18px; height: 18px; accent-color: #10b981;" />
+            <span style="font-weight: 600;">Cupom Ativo (disponível para uso imediato)</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="admin-modal-footer">
+        <button type="button" class="btn-admin" onclick="closeCouponModal()">Cancelar</button>
+        <button type="button" class="btn-admin btn-save-photo" onclick="saveCouponFromModal()">
+          💾 Salvar Cupom
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Alteração de PIN do Admin (FRENTE 2) -->
+  <div class="admin-modal-overlay" id="pin-change-modal" style="display: none;">
+    <div class="admin-modal-box">
+      <div class="admin-modal-header">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 1.6rem;">🔑</span>
+          <div>
+            <h3>Alterar PIN de Acesso</h3>
+            <span style="font-size: 0.8rem; color: var(--text-muted);">Defina um novo PIN numérico de 4 a 8 dígitos para proteger o painel</span>
+          </div>
+        </div>
+        <button class="btn-close-modal" onclick="closeChangePinModal()">&times;</button>
+      </div>
+
+      <div class="admin-modal-body">
+        <div class="form-group-admin">
+          <label for="input-current-pin">PIN Atual:</label>
+          <input type="password" id="input-current-pin" class="admin-form-input" maxlength="8" placeholder="Digite o PIN atual (padrão: 1234)" />
+        </div>
+
+        <div class="form-group-admin">
+          <label for="input-new-pin">Novo PIN (apenas números):</label>
+          <input type="password" id="input-new-pin" class="admin-form-input" maxlength="8" placeholder="Digite o novo PIN (4 a 8 dígitos)" />
+        </div>
+
+        <div class="form-group-admin">
+          <label for="input-confirm-pin">Confirmar Novo PIN:</label>
+          <input type="password" id="input-confirm-pin" class="admin-form-input" maxlength="8" placeholder="Repita o novo PIN" />
+        </div>
+
+        <div id="pin-change-feedback" style="display: none; padding: 10px; border-radius: 8px; font-size: 0.85rem; font-weight: 600;"></div>
+      </div>
+
+      <div class="admin-modal-footer">
+        <button type="button" class="btn-admin" onclick="closeChangePinModal()">Cancelar</button>
+        <button type="button" class="btn-admin btn-save-hours" onclick="saveNewAdminPin()">
+          💾 Atualizar PIN
         </button>
       </div>
     </div>

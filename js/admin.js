@@ -19,7 +19,16 @@ const adminState = {
   modalStatusChoice: true,
   customImages: {},
   editingItemId: null,
-  currentTempImage: null
+  currentTempImage: null,
+  // Frente 2: PIN do Admin
+  adminPin: "1234",
+  enteredPin: "",
+  isAuthenticated: false,
+  // Frente 3: Cupons de Desconto
+  coupons: [],
+  couponModalType: "percent",
+  // Frente 4: Relatórios
+  reportsPeriod: "today"
 };
 
 // Formatação BRL
@@ -29,6 +38,9 @@ function formatBRL(val) {
 
 // Inicialização
 document.addEventListener("DOMContentLoaded", () => {
+  checkAdminAuth();
+  loadAdminPin();
+  loadCoupons();
   loadOrders();
   loadStockStatus();
   loadStoreSettings();
@@ -66,6 +78,9 @@ function setupCloudAndBroadcastSync() {
         adminState.orders = ordersList || [];
         renderKanban();
         updateMetrics();
+        if (adminState.activeTab === "reports") {
+          renderReports();
+        }
       },
       (newOrder) => {
         playNotificationBeep();
@@ -98,6 +113,25 @@ function setupCloudAndBroadcastSync() {
       if (settings) {
         adminState.storeSettings = settings;
         updateStoreHeaderButton();
+      }
+    });
+  }
+
+  // Ouvir Cupons em tempo real (Frente 3)
+  if (typeof fbListenCoupons === "function") {
+    fbListenCoupons((couponsList) => {
+      if (couponsList && Array.isArray(couponsList)) {
+        adminState.coupons = couponsList;
+        renderCouponsList();
+      }
+    });
+  }
+
+  // Ouvir PIN do Admin em tempo real (Frente 2)
+  if (typeof fbListenAdminPin === "function") {
+    fbListenAdminPin((remotePin) => {
+      if (remotePin) {
+        adminState.adminPin = String(remotePin);
       }
     });
   }
@@ -322,9 +356,20 @@ function printReceiptOrder(orderId) {
       `).join('')}
     </div>
 
+    ${order.discountAmount > 0 ? `
+      <div style="display: flex; justify-content: space-between; font-size: 11px; color: #000; margin-bottom: 2px;">
+        <span>Subtotal:</span>
+        <span>${formatBRL(order.subtotal || 0)}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: bold; margin-bottom: 4px;">
+        <span>Desconto (${order.couponCode || 'Cupom'}):</span>
+        <span>- ${formatBRL(order.discountAmount)}</span>
+      </div>
+    ` : ''}
+
     <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 14px; margin-bottom: 4px;">
-      <span>TOTAL:</span>
-      <span>${formatBRL(order.subtotal || 0)}</span>
+      <span>TOTAL A PAGAR:</span>
+      <span>${formatBRL(order.totalPrice !== undefined ? order.totalPrice : (order.subtotal || 0))}</span>
     </div>
 
     <div style="font-size: 11px; margin-bottom: 10px;">
@@ -354,19 +399,26 @@ function setupAdminControls() {
   const btnSimulate = document.getElementById("btn-simulate-order");
   if (btnSimulate) {
     btnSimulate.onclick = () => {
+      const mockPayMethods = ["PIX", "Cartão de Crédito na Entrega", "Dinheiro (Troco para R$ 100)"];
+      const chosenPay = mockPayMethods[Math.floor(Math.random() * mockPayMethods.length)];
+      const hasCoupon = Math.random() > 0.5;
+      const sub = 79.90;
+      const disc = hasCoupon ? 10.00 : 0;
+      const tot = sub - disc;
+
       const mockOrder = {
         id: `#${Math.floor(1000 + Math.random() * 9000)}`,
         timestamp: Date.now(),
         dateStr: new Date().toLocaleDateString('pt-BR'),
         timeStr: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
         customer: {
-          name: "Cliente Teste",
+          name: ["Romário Ramos", "Ana Paula", "Carlos Silva", "Beatriz Lima"][Math.floor(Math.random() * 4)],
           phone: "(85) 98888-0000",
           address: "Rua das Flores, 100 - Jacaúna",
           reference: "Próximo à praça"
         },
-        deliveryType: "delivery",
-        paymentMethod: "PIX",
+        deliveryType: Math.random() > 0.3 ? "delivery" : "balcao",
+        paymentMethod: chosenPay,
         items: [
           {
             name: "Pizza Calabresa (GG)",
@@ -385,7 +437,10 @@ function setupAdminControls() {
             totalPrice: 15.00
           }
         ],
-        subtotal: 79.90,
+        subtotal: sub,
+        discountAmount: disc,
+        couponCode: hasCoupon ? "BEMVINDO" : null,
+        totalPrice: tot,
         status: "pendente"
       };
 
@@ -397,6 +452,9 @@ function setupAdminControls() {
       playNotificationBeep();
       renderKanban();
       updateMetrics();
+      if (adminState.activeTab === "reports") {
+        renderReports();
+      }
     };
   }
 
@@ -411,6 +469,9 @@ function setupAdminControls() {
         }
         renderKanban();
         updateMetrics();
+        if (adminState.activeTab === "reports") {
+          renderReports();
+        }
       }
     };
   }
@@ -444,29 +505,30 @@ function saveStockStatus() {
 
 // Alternar entre abas (KDS vs Gestão de Sabores)
 function setupTabNavigation() {
-  const btnKds = document.getElementById("tab-btn-kds");
-  const btnStock = document.getElementById("tab-btn-stock");
-  const viewKds = document.getElementById("view-kds");
-  const viewStock = document.getElementById("view-stock");
+  const tabs = [
+    { btnId: "tab-btn-kds", viewId: "view-kds", name: "kds", onOpen: null },
+    { btnId: "tab-btn-stock", viewId: "view-stock", name: "stock", onOpen: renderStockManager },
+    { btnId: "tab-btn-coupons", viewId: "view-coupons", name: "coupons", onOpen: renderCouponsList },
+    { btnId: "tab-btn-reports", viewId: "view-reports", name: "reports", onOpen: renderReports }
+  ];
 
-  if (btnKds && btnStock && viewKds && viewStock) {
-    btnKds.onclick = () => {
-      adminState.activeTab = "kds";
-      btnKds.classList.add("active");
-      btnStock.classList.remove("active");
-      viewKds.style.display = "block";
-      viewStock.style.display = "none";
-    };
-
-    btnStock.onclick = () => {
-      adminState.activeTab = "stock";
-      btnStock.classList.add("active");
-      btnKds.classList.remove("active");
-      viewKds.style.display = "none";
-      viewStock.style.display = "block";
-      renderStockManager();
-    };
-  }
+  tabs.forEach(tab => {
+    const btn = document.getElementById(tab.btnId);
+    if (btn) {
+      btn.onclick = () => {
+        adminState.activeTab = tab.name;
+        tabs.forEach(t => {
+          const b = document.getElementById(t.btnId);
+          const v = document.getElementById(t.viewId);
+          if (b) b.classList.toggle("active", t.btnId === tab.btnId);
+          if (v) v.style.display = t.btnId === tab.btnId ? "block" : "none";
+        });
+        if (typeof tab.onOpen === "function") {
+          tab.onOpen();
+        }
+      };
+    }
+  });
 }
 
 // Exibir banner de notificação no painel de estoque
@@ -1079,4 +1141,815 @@ function saveFirebaseSettingsFromModal() {
   }
 }
 window.saveFirebaseSettingsFromModal = saveFirebaseSettingsFromModal;
+
+// ============================================================
+// FRENTE 2: CONTROLE DE ACESSO / SENHA E PIN DO ADMIN
+// ============================================================
+
+function checkAdminAuth() {
+  const isAuth = sessionStorage.getItem("elieudo_admin_authenticated") === "true";
+  const overlay = document.getElementById("admin-lockscreen-overlay");
+  if (overlay) {
+    if (isAuth) {
+      overlay.style.display = "none";
+      adminState.isAuthenticated = true;
+    } else {
+      overlay.style.display = "flex";
+      adminState.isAuthenticated = false;
+      clearPin();
+    }
+  }
+}
+
+function loadAdminPin() {
+  const saved = localStorage.getItem("elieudo_admin_pin");
+  if (saved) {
+    adminState.adminPin = String(saved);
+  }
+}
+
+function appendPinDigit(digit) {
+  if (adminState.enteredPin.length < 8) {
+    adminState.enteredPin += digit;
+    updatePinDisplay();
+  }
+}
+window.appendPinDigit = appendPinDigit;
+
+function clearPin() {
+  adminState.enteredPin = "";
+  updatePinDisplay();
+  const errMsg = document.getElementById("pin-error-msg");
+  if (errMsg) errMsg.style.display = "none";
+}
+window.clearPin = clearPin;
+
+function backspacePin() {
+  if (adminState.enteredPin.length > 0) {
+    adminState.enteredPin = adminState.enteredPin.slice(0, -1);
+    updatePinDisplay();
+  }
+}
+window.backspacePin = backspacePin;
+
+function updatePinDisplay() {
+  const pinInput = document.getElementById("admin-pin-input");
+  if (pinInput) {
+    pinInput.value = adminState.enteredPin;
+  }
+}
+
+function verifyAdminPin() {
+  const errMsg = document.getElementById("pin-error-msg");
+  const overlay = document.getElementById("admin-lockscreen-overlay");
+  
+  if (adminState.enteredPin === adminState.adminPin) {
+    sessionStorage.setItem("elieudo_admin_authenticated", "true");
+    adminState.isAuthenticated = true;
+    if (errMsg) errMsg.style.display = "none";
+    if (overlay) {
+      overlay.style.transition = "opacity 0.25s ease";
+      overlay.style.opacity = "0";
+      setTimeout(() => {
+        overlay.style.display = "none";
+        overlay.style.opacity = "1";
+      }, 250);
+    }
+    playNotificationBeep();
+  } else {
+    if (errMsg) errMsg.style.display = "block";
+    const pinInput = document.getElementById("admin-pin-input");
+    if (pinInput) {
+      pinInput.classList.add("shake-error");
+      setTimeout(() => pinInput.classList.remove("shake-error"), 400);
+    }
+    setTimeout(() => {
+      clearPin();
+    }, 800);
+  }
+}
+window.verifyAdminPin = verifyAdminPin;
+
+function logoutAdmin() {
+  if (confirm("Deseja realmente bloquear o painel administrativo?")) {
+    sessionStorage.removeItem("elieudo_admin_authenticated");
+    adminState.isAuthenticated = false;
+    clearPin();
+    const overlay = document.getElementById("admin-lockscreen-overlay");
+    if (overlay) overlay.style.display = "flex";
+  }
+}
+window.logoutAdmin = logoutAdmin;
+
+function openChangePinModal() {
+  const modal = document.getElementById("pin-change-modal");
+  const fb = document.getElementById("pin-change-feedback");
+  if (fb) fb.style.display = "none";
+  const cur = document.getElementById("input-current-pin");
+  const n1 = document.getElementById("input-new-pin");
+  const n2 = document.getElementById("input-confirm-pin");
+  if (cur) cur.value = "";
+  if (n1) n1.value = "";
+  if (n2) n2.value = "";
+  if (modal) modal.style.display = "flex";
+}
+window.openChangePinModal = openChangePinModal;
+
+function closeChangePinModal() {
+  const modal = document.getElementById("pin-change-modal");
+  if (modal) modal.style.display = "none";
+}
+window.closeChangePinModal = closeChangePinModal;
+
+function saveNewAdminPin() {
+  const cur = document.getElementById("input-current-pin");
+  const n1 = document.getElementById("input-new-pin");
+  const n2 = document.getElementById("input-confirm-pin");
+  const fb = document.getElementById("pin-change-feedback");
+
+  const curVal = cur ? cur.value.trim() : "";
+  const n1Val = n1 ? n1.value.trim() : "";
+  const n2Val = n2 ? n2.value.trim() : "";
+
+  const showErr = (msg) => {
+    if (fb) {
+      fb.style.display = "block";
+      fb.style.background = "rgba(239, 68, 68, 0.2)";
+      fb.style.color = "#f87171";
+      fb.innerText = msg;
+    }
+  };
+
+  if (curVal !== adminState.adminPin) {
+    showErr("O PIN atual informado está incorreto!");
+    return;
+  }
+  if (!/^\d{4,8}$/.test(n1Val)) {
+    showErr("O novo PIN deve conter entre 4 e 8 números!");
+    return;
+  }
+  if (n1Val !== n2Val) {
+    showErr("A confirmação do novo PIN não confere!");
+    return;
+  }
+
+  adminState.adminPin = n1Val;
+  localStorage.setItem("elieudo_admin_pin", n1Val);
+  if (typeof fbSaveAdminPin === "function") {
+    fbSaveAdminPin(n1Val);
+  }
+
+  if (fb) {
+    fb.style.display = "block";
+    fb.style.background = "rgba(16, 185, 129, 0.2)";
+    fb.style.color = "#34d399";
+    fb.innerText = "✅ PIN atualizado com sucesso!";
+  }
+
+  setTimeout(() => {
+    closeChangePinModal();
+  }, 1200);
+}
+window.saveNewAdminPin = saveNewAdminPin;
+
+// ============================================================
+// FRENTE 3: GERENCIAMENTO DE CUPONS DE DESCONTO & PROMOÇÕES
+// ============================================================
+
+function loadCoupons() {
+  try {
+    const raw = localStorage.getItem("elieudo_coupons_db");
+    if (raw) {
+      adminState.coupons = JSON.parse(raw);
+    } else {
+      adminState.coupons = [
+        { code: "BEMVINDO", type: "percent", value: 10, minOrder: 30, active: true, desc: "10% OFF na primeira compra" },
+        { code: "ELIEUDO5", type: "fixed", value: 5, minOrder: 40, active: true, desc: "R$ 5,00 OFF acima de R$ 40" }
+      ];
+    }
+  } catch (e) {
+    adminState.coupons = [];
+  }
+  updateCouponsBadge();
+}
+
+function saveCoupons() {
+  localStorage.setItem("elieudo_coupons_db", JSON.stringify(adminState.coupons));
+  if (typeof fbSaveCoupons === "function") {
+    fbSaveCoupons(adminState.coupons);
+  }
+  if (window.BroadcastChannel) {
+    const channel = new BroadcastChannel("elieudo_coupons_bus");
+    channel.postMessage({ type: "COUPONS_UPDATED", coupons: adminState.coupons });
+  }
+  updateCouponsBadge();
+}
+
+function updateCouponsBadge() {
+  const badge = document.getElementById("badge-coupons-count");
+  if (badge) {
+    const activeCount = adminState.coupons.filter(c => c.active).length;
+    badge.innerText = `${activeCount} ativo${activeCount === 1 ? '' : 's'}`;
+  }
+}
+
+function renderCouponsList() {
+  const container = document.getElementById("coupons-container");
+  if (!container) return;
+
+  updateCouponsBadge();
+
+  if (!adminState.coupons || adminState.coupons.length === 0) {
+    container.innerHTML = `
+      <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--text-muted);">
+        <p style="font-size: 2.4rem; margin-bottom: 8px;">🎟️</p>
+        <p>Nenhum cupom cadastrado no momento.</p>
+        <button class="btn-admin btn-save-photo" onclick="openCreateCouponModal()" style="margin-top: 14px;">
+          ➕ Criar Primeiro Cupom
+        </button>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = adminState.coupons.map(coupon => {
+    const discountText = coupon.type === "percent" 
+      ? `${coupon.value}% de Desconto` 
+      : `${formatBRL(coupon.value)} de Desconto`;
+    const minOrderText = coupon.minOrder > 0 
+      ? `Pedido mínimo: ${formatBRL(coupon.minOrder)}` 
+      : `Sem valor mínimo de pedido`;
+
+    return `
+      <div class="coupon-card ${coupon.active ? '' : 'is-inactive'}">
+        <div class="coupon-card-header">
+          <div class="coupon-badge-code">
+            <span>🎟️</span>
+            <span>${coupon.code}</span>
+          </div>
+          <span class="coupon-status-badge ${coupon.active ? 'active' : 'inactive'}">
+            ${coupon.active ? '🟢 Ativo' : '🔴 Pausado'}
+          </span>
+        </div>
+
+        <div>
+          <div class="coupon-discount-val">${discountText}</div>
+          <div class="coupon-rule-sub" style="margin-top: 4px;">${minOrderText}</div>
+          ${coupon.desc ? `<div class="coupon-rule-sub" style="font-style: italic; margin-top: 2px;">"${coupon.desc}"</div>` : ''}
+        </div>
+
+        <div class="coupon-card-footer">
+          <button class="btn-admin" onclick="toggleCouponStatus('${coupon.code}')" style="font-size: 0.8rem; padding: 6px 12px;">
+            ${coupon.active ? '⏸️ Pausar' : '▶️ Ativar'}
+          </button>
+          <div class="coupon-action-btns">
+            <button class="btn-admin" onclick="openEditCouponModal('${coupon.code}')" title="Editar Cupom" style="font-size: 0.8rem; padding: 6px 10px;">
+              ✏️
+            </button>
+            <button class="btn-admin" onclick="deleteCoupon('${coupon.code}')" title="Excluir Cupom" style="font-size: 0.8rem; padding: 6px 10px; color: #ef4444;">
+              🗑️
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+function openCreateCouponModal() {
+  const modal = document.getElementById("coupon-edit-modal");
+  const title = document.getElementById("coupon-modal-title");
+  const orig = document.getElementById("input-coupon-original-code");
+  const code = document.getElementById("input-coupon-code");
+  const val = document.getElementById("input-coupon-value");
+  const min = document.getElementById("input-coupon-min-order");
+  const desc = document.getElementById("input-coupon-desc");
+  const act = document.getElementById("input-coupon-active");
+
+  if (title) title.innerText = "Criar Novo Cupom";
+  if (orig) orig.value = "";
+  if (code) { code.value = ""; code.disabled = false; }
+  if (val) val.value = "";
+  if (min) min.value = "";
+  if (desc) desc.value = "";
+  if (act) act.checked = true;
+
+  setCouponTypeChoice("percent");
+  if (modal) modal.style.display = "flex";
+}
+window.openCreateCouponModal = openCreateCouponModal;
+
+function openEditCouponModal(couponCode) {
+  const coupon = adminState.coupons.find(c => c.code === couponCode);
+  if (!coupon) return;
+
+  const modal = document.getElementById("coupon-edit-modal");
+  const title = document.getElementById("coupon-modal-title");
+  const orig = document.getElementById("input-coupon-original-code");
+  const code = document.getElementById("input-coupon-code");
+  const val = document.getElementById("input-coupon-value");
+  const min = document.getElementById("input-coupon-min-order");
+  const desc = document.getElementById("input-coupon-desc");
+  const act = document.getElementById("input-coupon-active");
+
+  if (title) title.innerText = `Editar Cupom: ${coupon.code}`;
+  if (orig) orig.value = coupon.code;
+  if (code) { code.value = coupon.code; code.disabled = true; }
+  if (val) val.value = coupon.value;
+  if (min) min.value = coupon.minOrder || "";
+  if (desc) desc.value = coupon.desc || "";
+  if (act) act.checked = !!coupon.active;
+
+  setCouponTypeChoice(coupon.type || "percent");
+  if (modal) modal.style.display = "flex";
+}
+window.openEditCouponModal = openEditCouponModal;
+
+function closeCouponModal() {
+  const modal = document.getElementById("coupon-edit-modal");
+  if (modal) modal.style.display = "none";
+}
+window.closeCouponModal = closeCouponModal;
+
+function setCouponTypeChoice(type) {
+  adminState.couponModalType = type;
+  const btnP = document.getElementById("choice-coupon-percent");
+  const btnF = document.getElementById("choice-coupon-fixed");
+  const label = document.getElementById("label-coupon-value");
+
+  if (btnP) btnP.classList.toggle("active", type === "percent");
+  if (btnF) btnF.classList.toggle("active", type === "fixed");
+  if (label) {
+    label.innerText = type === "percent" ? "Valor do Desconto (%):" : "Valor do Desconto em Reais (R$):";
+  }
+}
+window.setCouponTypeChoice = setCouponTypeChoice;
+
+function saveCouponFromModal() {
+  const origCode = document.getElementById("input-coupon-original-code").value;
+  const codeInput = document.getElementById("input-coupon-code");
+  const valInput = document.getElementById("input-coupon-value");
+  const minInput = document.getElementById("input-coupon-min-order");
+  const descInput = document.getElementById("input-coupon-desc");
+  const activeInput = document.getElementById("input-coupon-active");
+
+  const cleanCode = codeInput ? codeInput.value.toUpperCase().replace(/[^A-Z0-9]/g, "").trim() : "";
+  const numVal = parseFloat(valInput ? valInput.value : "0");
+  const numMin = parseFloat(minInput && minInput.value ? minInput.value : "0");
+  const desc = descInput ? descInput.value.trim() : "";
+  const isActive = activeInput ? activeInput.checked : true;
+
+  if (!cleanCode) {
+    alert("Por favor, digite um código válido para o cupom (letras e números)!");
+    return;
+  }
+  if (isNaN(numVal) || numVal <= 0) {
+    alert("Por favor, informe um valor de desconto válido e maior que zero!");
+    return;
+  }
+  if (adminState.couponModalType === "percent" && numVal > 100) {
+    alert("O desconto percentual não pode ser maior que 100%!");
+    return;
+  }
+
+  // Verifica duplicação na criação
+  if (!origCode && adminState.coupons.some(c => c.code === cleanCode)) {
+    alert(`Já existe um cupom com o código ${cleanCode}! Escolha outro nome.`);
+    return;
+  }
+
+  const couponData = {
+    code: cleanCode,
+    type: adminState.couponModalType,
+    value: numVal,
+    minOrder: isNaN(numMin) ? 0 : numMin,
+    desc: desc,
+    active: isActive
+  };
+
+  if (origCode) {
+    const idx = adminState.coupons.findIndex(c => c.code === origCode);
+    if (idx !== -1) adminState.coupons[idx] = couponData;
+  } else {
+    adminState.coupons.unshift(couponData);
+  }
+
+  saveCoupons();
+  renderCouponsList();
+  closeCouponModal();
+  showCouponBanner(`✅ Cupom ${cleanCode} salvo com sucesso!`, "success");
+}
+window.saveCouponFromModal = saveCouponFromModal;
+
+function toggleCouponStatus(code) {
+  const coupon = adminState.coupons.find(c => c.code === code);
+  if (coupon) {
+    coupon.active = !coupon.active;
+    saveCoupons();
+    renderCouponsList();
+    showCouponBanner(`Cupom ${code} ${coupon.active ? 'ativado' : 'pausado'}.`, "info");
+  }
+}
+window.toggleCouponStatus = toggleCouponStatus;
+
+function deleteCoupon(code) {
+  if (confirm(`Deseja realmente excluir o cupom ${code}?`)) {
+    adminState.coupons = adminState.coupons.filter(c => c.code !== code);
+    saveCoupons();
+    renderCouponsList();
+    showCouponBanner(`Cupom ${code} excluído.`, "info");
+  }
+}
+window.deleteCoupon = deleteCoupon;
+
+function showCouponBanner(msg, type = "success") {
+  const banner = document.getElementById("coupon-notification-banner");
+  if (!banner) return;
+  banner.className = `stock-banner banner-${type}`;
+  banner.innerHTML = `<span>${msg}</span>`;
+  banner.style.display = "flex";
+  setTimeout(() => { banner.style.display = "none"; }, 3000);
+}
+
+// ============================================================
+// FRENTE 4: RELATÓRIOS & FECHAMENTO DE CAIXA
+// ============================================================
+
+function setReportsPeriod(period) {
+  adminState.reportsPeriod = period;
+  document.querySelectorAll(".report-chip-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.period === period);
+  });
+  renderReports();
+}
+window.setReportsPeriod = setReportsPeriod;
+
+function getFilteredOrdersForReports() {
+  const allOrders = adminState.orders || [];
+  const validOrders = allOrders.filter(o => o.status !== "cancelado");
+
+  const now = new Date();
+  const todayDateStr = now.toLocaleDateString('pt-BR');
+
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayDateStr = yesterday.toLocaleDateString('pt-BR');
+
+  const weekAgo = new Date();
+  weekAgo.setDate(weekAgo.getDate() - 7);
+
+  const curMonth = now.getMonth();
+  const curYear = now.getFullYear();
+
+  return validOrders.filter(order => {
+    if (adminState.reportsPeriod === "all") return true;
+
+    const orderTime = order.timestamp ? new Date(order.timestamp) : null;
+    const orderDateStr = order.dateStr || (orderTime ? orderTime.toLocaleDateString('pt-BR') : "");
+
+    if (adminState.reportsPeriod === "today") {
+      return orderDateStr === todayDateStr;
+    }
+    if (adminState.reportsPeriod === "yesterday") {
+      return orderDateStr === yesterdayDateStr;
+    }
+    if (adminState.reportsPeriod === "week") {
+      return orderTime ? orderTime >= weekAgo : false;
+    }
+    if (adminState.reportsPeriod === "month") {
+      return orderTime ? (orderTime.getMonth() === curMonth && orderTime.getFullYear() === curYear) : false;
+    }
+    return true;
+  });
+}
+
+function renderReports() {
+  const orders = getFilteredOrdersForReports();
+
+  let totalRevenue = 0;
+  let totalDiscounts = 0;
+  let totalDelivery = 0;
+  let paymentCounts = { pix: 0, cartao: 0, dinheiro: 0 };
+  let paymentTotals = { pix: 0, cartao: 0, dinheiro: 0 };
+  let deliveryCount = 0;
+  let balcaoCount = 0;
+  let productStats = {};
+
+  orders.forEach(o => {
+    const orderTotal = o.totalPrice !== undefined ? o.totalPrice : (o.subtotal || 0);
+    totalRevenue += orderTotal;
+    totalDiscounts += (o.discountAmount || 0);
+    totalDelivery += (o.deliveryFee || 0);
+
+    // Meio de pagamento
+    const payStr = (o.paymentMethod || "").toLowerCase();
+    if (payStr.includes("pix")) {
+      paymentCounts.pix++;
+      paymentTotals.pix += orderTotal;
+    } else if (payStr.includes("cart") || payStr.includes("crédito") || payStr.includes("débito")) {
+      paymentCounts.cartao++;
+      paymentTotals.cartao += orderTotal;
+    } else {
+      paymentCounts.dinheiro++;
+      paymentTotals.dinheiro += orderTotal;
+    }
+
+    // Modalidade
+    if (o.deliveryType === "delivery") {
+      deliveryCount++;
+    } else {
+      balcaoCount++;
+    }
+
+    // Produtos e sabores
+    if (Array.isArray(o.items)) {
+      o.items.forEach(item => {
+        const key = item.flavorDescription || item.name || "Item";
+        const qty = item.quantity || 1;
+        const isPizza = (item.category && item.category.includes("pizza")) || key.toLowerCase().includes("pizza") || item.selectedFlavors;
+        if (!productStats[key]) {
+          productStats[key] = { name: key, count: 0, isPizza: !!isPizza };
+        }
+        productStats[key].count += qty;
+      });
+    }
+  });
+
+  const completedCount = orders.length;
+  const avgTicket = completedCount > 0 ? (totalRevenue / completedCount) : 0;
+
+  // Atualizar KPIs
+  const elRev = document.getElementById("rep-total-revenue");
+  const elOrdersSub = document.getElementById("rep-orders-count-sub");
+  const elTicket = document.getElementById("rep-average-ticket");
+  const elDisc = document.getElementById("rep-total-discounts");
+  const elDiscSub = document.getElementById("rep-coupons-used-sub");
+  const elDeliv = document.getElementById("rep-delivery-total");
+  const elDelivSub = document.getElementById("rep-delivery-count-sub");
+
+  if (elRev) elRev.innerText = formatBRL(totalRevenue);
+  if (elOrdersSub) elOrdersSub.innerText = `${completedCount} pedido${completedCount === 1 ? '' : 's'} no período`;
+  if (elTicket) elTicket.innerText = formatBRL(avgTicket);
+  if (elDisc) elDisc.innerText = formatBRL(totalDiscounts);
+  if (elDiscSub) elDiscSub.innerText = totalDiscounts > 0 ? "Descontos concedidos" : "Nenhum desconto";
+  if (elDeliv) elDeliv.innerText = formatBRL(totalDelivery);
+  if (elDelivSub) elDelivSub.innerText = `${deliveryCount} entrega${deliveryCount === 1 ? '' : 's'}`;
+
+  // Formas de Pagamento
+  const payList = document.getElementById("rep-payment-methods-list");
+  if (payList) {
+    const totalAllPay = (paymentTotals.pix + paymentTotals.cartao + paymentTotals.dinheiro) || 1;
+    const pixPct = Math.round((paymentTotals.pix / totalAllPay) * 100);
+    const cardPct = Math.round((paymentTotals.cartao / totalAllPay) * 100);
+    const cashPct = Math.round((paymentTotals.dinheiro / totalAllPay) * 100);
+
+    payList.innerHTML = `
+      <div class="payment-bar-item">
+        <div class="payment-bar-header">
+          <span>🟢 PIX (${paymentCounts.pix} pedidos)</span>
+          <span>${formatBRL(paymentTotals.pix)} (${pixPct}%)</span>
+        </div>
+        <div class="payment-bar-track">
+          <div class="payment-bar-fill fill-pix" style="width: ${pixPct}%;"></div>
+        </div>
+      </div>
+
+      <div class="payment-bar-item">
+        <div class="payment-bar-header">
+          <span>💳 Cartão de Crédito / Débito (${paymentCounts.cartao} pedidos)</span>
+          <span>${formatBRL(paymentTotals.cartao)} (${cardPct}%)</span>
+        </div>
+        <div class="payment-bar-track">
+          <div class="payment-bar-fill fill-card" style="width: ${cardPct}%;"></div>
+        </div>
+      </div>
+
+      <div class="payment-bar-item">
+        <div class="payment-bar-header">
+          <span>💵 Dinheiro (${paymentCounts.dinheiro} pedidos)</span>
+          <span>${formatBRL(paymentTotals.dinheiro)} (${cashPct}%)</span>
+        </div>
+        <div class="payment-bar-track">
+          <div class="payment-bar-fill fill-cash" style="width: ${cashPct}%;"></div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Split Delivery vs Balcão
+  const delivCard = document.getElementById("rep-delivery-split-card");
+  if (delivCard) {
+    const totalSplit = (deliveryCount + balcaoCount) || 1;
+    const delivPct = Math.round((deliveryCount / totalSplit) * 100);
+    const balcaoPct = Math.round((balcaoCount / totalSplit) * 100);
+
+    delivCard.innerHTML = `
+      <div class="split-stat-row">
+        <div class="split-stat-label">
+          <span>🛵 Delivery (Entrega)</span>
+        </div>
+        <div class="split-stat-val text-green">${deliveryCount} (${delivPct}%)</div>
+      </div>
+
+      <div class="split-stat-row">
+        <div class="split-stat-label">
+          <span>🏪 Retirada no Balcão</span>
+        </div>
+        <div class="split-stat-val" style="color: #60a5fa;">${balcaoCount} (${balcaoPct}%)</div>
+      </div>
+    `;
+  }
+
+  // Rankings
+  const pizzasList = Object.values(productStats).filter(p => p.isPizza).sort((a, b) => b.count - a.count);
+  const othersList = Object.values(productStats).filter(p => !p.isPizza).sort((a, b) => b.count - a.count);
+
+  const topPizzasEl = document.getElementById("rep-top-pizzas-list");
+  const topOthersEl = document.getElementById("rep-top-others-list");
+
+  if (topPizzasEl) {
+    if (pizzasList.length === 0) {
+      topPizzasEl.innerHTML = `<span style="font-size: 0.85rem; color: var(--text-dim);">Sem pedidos de pizza no período.</span>`;
+    } else {
+      topPizzasEl.innerHTML = pizzasList.slice(0, 5).map((item, idx) => `
+        <div class="ranking-item">
+          <span class="ranking-pos">${idx + 1}º</span>
+          <span class="ranking-name">${item.name}</span>
+          <span class="ranking-qty">${item.count} un</span>
+        </div>
+      `).join("");
+    }
+  }
+
+  if (topOthersEl) {
+    if (othersList.length === 0) {
+      topOthersEl.innerHTML = `<span style="font-size: 0.85rem; color: var(--text-dim);">Sem bebidas ou esfihas no período.</span>`;
+    } else {
+      topOthersEl.innerHTML = othersList.slice(0, 5).map((item, idx) => `
+        <div class="ranking-item">
+          <span class="ranking-pos">${idx + 1}º</span>
+          <span class="ranking-name">${item.name}</span>
+          <span class="ranking-qty">${item.count} un</span>
+        </div>
+      `).join("");
+    }
+  }
+}
+
+function printCashClosingReceipt() {
+  const orders = getFilteredOrdersForReports();
+  const periodMap = {
+    today: "Hoje",
+    yesterday: "Ontem",
+    week: "Últimos 7 Dias",
+    month: "Este Mês",
+    all: "Todo o Histórico"
+  };
+  const periodLabel = periodMap[adminState.reportsPeriod] || "Personalizado";
+
+  let totalRevenue = 0;
+  let totalDiscounts = 0;
+  let payTotals = { pix: 0, cartao: 0, dinheiro: 0 };
+  let payCounts = { pix: 0, cartao: 0, dinheiro: 0 };
+  let deliveryCount = 0;
+  let balcaoCount = 0;
+
+  orders.forEach(o => {
+    const val = o.totalPrice !== undefined ? o.totalPrice : (o.subtotal || 0);
+    totalRevenue += val;
+    totalDiscounts += (o.discountAmount || 0);
+
+    const pay = (o.paymentMethod || "").toLowerCase();
+    if (pay.includes("pix")) { payTotals.pix += val; payCounts.pix++; }
+    else if (pay.includes("cart") || pay.includes("crédito") || pay.includes("débito")) { payTotals.cartao += val; payCounts.cartao++; }
+    else { payTotals.dinheiro += val; payCounts.dinheiro++; }
+
+    if (o.deliveryType === "delivery") deliveryCount++; else balcaoCount++;
+  });
+
+  const now = new Date();
+  const emitStr = `${now.toLocaleDateString('pt-BR')} às ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+
+  const thermalDiv = document.getElementById("admin-thermal-receipt");
+  if (!thermalDiv) return;
+
+  thermalDiv.innerHTML = `
+    <div style="font-family: monospace; font-size: 12px; line-height: 1.4; width: 280px; margin: 0 auto; color: #000; padding: 10px;">
+      <div style="text-align: center; font-weight: bold; font-size: 14px;">PIZZARIA DO ELIEUDO</div>
+      <div style="text-align: center; font-size: 11px;">FECHAMENTO DE CAIXA</div>
+      <div style="text-align: center; font-size: 10px; margin-bottom: 6px;">Emissão: ${emitStr}</div>
+      <div style="border-top: 1px dashed #000; margin: 6px 0;"></div>
+      
+      <div><strong>Período:</strong> ${periodLabel}</div>
+      <div><strong>Total de Pedidos:</strong> ${orders.length}</div>
+      <div><strong>Delivery:</strong> ${deliveryCount} | <strong>Balcão:</strong> ${balcaoCount}</div>
+      <div style="border-top: 1px dashed #000; margin: 6px 0;"></div>
+
+      <div style="font-weight: bold; margin-bottom: 4px;">FORMAS DE PAGAMENTO:</div>
+      <div style="display: flex; justify-content: space-between;">
+        <span>PIX (${payCounts.pix}):</span>
+        <span>${formatBRL(payTotals.pix)}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between;">
+        <span>Cartão (${payCounts.cartao}):</span>
+        <span>${formatBRL(payTotals.cartao)}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between;">
+        <span>Dinheiro (${payCounts.dinheiro}):</span>
+        <span>${formatBRL(payTotals.dinheiro)}</span>
+      </div>
+
+      <div style="border-top: 1px dashed #000; margin: 6px 0;"></div>
+      ${totalDiscounts > 0 ? `
+        <div style="display: flex; justify-content: space-between;">
+          <span>Descontos Cupons:</span>
+          <span>- ${formatBRL(totalDiscounts)}</span>
+        </div>
+      ` : ''}
+      <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: bold; margin-top: 4px;">
+        <span>FATURAMENTO TOTAL:</span>
+        <span>${formatBRL(totalRevenue)}</span>
+      </div>
+
+      <div style="border-top: 1px dashed #000; margin: 12px 0 20px;"></div>
+      <div style="text-align: center; margin-top: 25px; border-top: 1px solid #000; padding-top: 4px; font-size: 11px;">
+        Assinatura do Responsável
+      </div>
+    </div>
+  `;
+
+  window.print();
+}
+window.printCashClosingReceipt = printCashClosingReceipt;
+
+function copyClosingToWhatsApp() {
+  const orders = getFilteredOrdersForReports();
+  const periodMap = {
+    today: "Hoje",
+    yesterday: "Ontem",
+    week: "Últimos 7 Dias",
+    month: "Este Mês",
+    all: "Todo o Histórico"
+  };
+  const periodLabel = periodMap[adminState.reportsPeriod] || "Personalizado";
+
+  let totalRevenue = 0;
+  let totalDiscounts = 0;
+  let totalDelivery = 0;
+  let payTotals = { pix: 0, cartao: 0, dinheiro: 0 };
+  let payCounts = { pix: 0, cartao: 0, dinheiro: 0 };
+  let deliveryCount = 0;
+  let balcaoCount = 0;
+
+  orders.forEach(o => {
+    const val = o.totalPrice !== undefined ? o.totalPrice : (o.subtotal || 0);
+    totalRevenue += val;
+    totalDiscounts += (o.discountAmount || 0);
+    totalDelivery += (o.deliveryFee || 0);
+
+    const pay = (o.paymentMethod || "").toLowerCase();
+    if (pay.includes("pix")) { payTotals.pix += val; payCounts.pix++; }
+    else if (pay.includes("cart") || pay.includes("crédito") || pay.includes("débito")) { payTotals.cartao += val; payCounts.cartao++; }
+    else { payTotals.dinheiro += val; payCounts.dinheiro++; }
+
+    if (o.deliveryType === "delivery") deliveryCount++; else balcaoCount++;
+  });
+
+  const now = new Date();
+  const emitStr = `${now.toLocaleDateString('pt-BR')} às ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+  const avgTicket = orders.length > 0 ? (totalRevenue / orders.length) : 0;
+
+  let msg = `🍕 *FECHAMENTO DE CAIXA - PIZZARIA DO ELIEUDO*\n`;
+  msg += `📅 *Período:* ${periodLabel}\n`;
+  msg += `🕒 *Emitido em:* ${emitStr}\n`;
+  msg += `-------------------------------------------\n`;
+  msg += `💰 *FATURAMENTO TOTAL: ${formatBRL(totalRevenue)}*\n`;
+  msg += `📋 *Total de Pedidos:* ${orders.length}\n`;
+  msg += `🏷️ *Ticket Médio:* ${formatBRL(avgTicket)}\n`;
+  if (totalDiscounts > 0) msg += `🎟️ *Descontos Concedidos:* ${formatBRL(totalDiscounts)}\n`;
+  if (totalDelivery > 0) msg += `🛵 *Taxas de Entrega:* ${formatBRL(totalDelivery)}\n`;
+  msg += `-------------------------------------------\n`;
+  msg += `💳 *FORMAS DE PAGAMENTO:*\n`;
+  msg += `• 🟢 PIX: ${formatBRL(payTotals.pix)} (${payCounts.pix} pedidos)\n`;
+  msg += `• 💳 Cartões: ${formatBRL(payTotals.cartao)} (${payCounts.cartao} pedidos)\n`;
+  msg += `• 💵 Dinheiro: ${formatBRL(payTotals.dinheiro)} (${payCounts.dinheiro} pedidos)\n`;
+  msg += `-------------------------------------------\n`;
+  msg += `🛵 *MODALIDADE DE ATENDIMENTO:*\n`;
+  msg += `• Delivery (Entrega): ${deliveryCount} pedidos\n`;
+  msg += `• Retirada no Balcão: ${balcaoCount} pedidos\n`;
+  msg += `-------------------------------------------\n`;
+  msg += `_Emitido pelo Painel Operacional Elieudo_`;
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(msg).then(() => {
+      alert("✅ Resumo do Fechamento de Caixa copiado com sucesso!\n\nCole diretamente no WhatsApp.");
+    }).catch(() => {
+      prompt("Copie o resumo abaixo:", msg);
+    });
+  } else {
+    prompt("Copie o resumo abaixo:", msg);
+  }
+}
+window.copyClosingToWhatsApp = copyClosingToWhatsApp;
+
 
