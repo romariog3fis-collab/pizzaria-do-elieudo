@@ -885,15 +885,19 @@ function renderCartDrawerItems() {
   if (totalEl) totalEl.innerText = formatMoney(finalTotal);
 }
 
-// Envio para o WhatsApp
-function submitOrderViaWhatsApp() {
-  // Verificar se a loja está aberta
+// ============================================================
+// ENVIO DO PEDIDO (FRENTE 1: CONFIRMAR E DEPOIS ENVIAR WHATSAPP)
+// ============================================================
+
+async function submitCustomerOrder() {
+  // 1. Verificar se a loja está aberta
   const storeSettings = getStoreSettings();
   if (!storeSettings.isOpen) {
     alert(`A Pizzaria do Elieudo está fechada no momento para novos pedidos.\n\nHorário de atendimento:\n${storeSettings.openingHours}\n\n${storeSettings.closedMessage || ''}`);
     return;
   }
 
+  // 2. Verificar se há itens no carrinho
   if (appState.cart.length === 0) {
     alert("Adicione pelo menos um item ao seu carrinho!");
     return;
@@ -905,6 +909,7 @@ function submitOrderViaWhatsApp() {
   const referenceInput = document.getElementById("input-customer-reference");
   const paymentSelect = document.getElementById("select-payment-method");
   const changeInput = document.getElementById("input-change-for");
+  const submitBtn = document.getElementById("btn-submit-order");
 
   const name = nameInput ? nameInput.value.trim() : "";
   const phone = phoneInput ? phoneInput.value.trim() : "";
@@ -925,6 +930,12 @@ function submitOrderViaWhatsApp() {
     return;
   }
 
+  // Travar botão com feedback visual
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = `<span>⏳ Registrando Pedido...</span>`;
+  }
+
   const subtotal = getCartSubtotal();
   let discountAmount = 0;
   let couponCode = null;
@@ -941,7 +952,14 @@ function submitOrderViaWhatsApp() {
   const finalTotal = Math.max(0, subtotal - discountAmount);
   const orderId = `#${Math.floor(1000 + Math.random() * 9000)}`;
 
-  // Construção da mensagem estruturada
+  let paymentText = "PIX";
+  if (payment === "cartao") paymentText = "Cartão (Levar maquininha na entrega)";
+  if (payment === "dinheiro") {
+    paymentText = "Dinheiro";
+    if (changeVal) paymentText += ` (Troco para ${changeVal})`;
+  }
+
+  // Montar mensagem para o WhatsApp
   let msg = `🍕 *PEDIDO ${orderId} - PIZZARIA DO ELIEUDO*\n`;
   msg += `-------------------------------------------\n`;
   msg += `👤 *Cliente:* ${name}\n`;
@@ -967,13 +985,6 @@ function submitOrderViaWhatsApp() {
     msg += `🎟️ *Cupom de Desconto:* ${couponCode} (- ${formatMoney(discountAmount)})\n`;
   }
   msg += `💰 *TOTAL A PAGAR: ${formatMoney(finalTotal)}*\n`;
-  
-  let paymentText = "PIX";
-  if (payment === "cartao") paymentText = "Cartão (Levar maquininha na entrega)";
-  if (payment === "dinheiro") {
-    paymentText = "Dinheiro";
-    if (changeVal) paymentText += ` (Troco para ${changeVal})`;
-  }
   msg += `💳 *Forma de Pagamento:* ${paymentText}\n`;
 
   if (payment === "pix") {
@@ -983,7 +994,7 @@ function submitOrderViaWhatsApp() {
   msg += `-------------------------------------------\n`;
   msg += `_Enviado pelo Cardápio Digital Elieudo_`;
 
-  // Salvar pedido no banco de dados local para o Painel do Administrador (KDS)
+  // Objeto estruturado do pedido
   const newOrderRecord = {
     id: orderId,
     timestamp: Date.now(),
@@ -1002,38 +1013,85 @@ function submitOrderViaWhatsApp() {
     discountAmount: discountAmount,
     couponCode: couponCode,
     totalPrice: finalTotal,
-    status: "pendente" // pendente -> preparando -> entrega -> finalizado
+    status: "pendente"
   };
 
+  // 1. Salvar no localStorage local
   try {
     const existingOrders = JSON.parse(localStorage.getItem("elieudo_orders_db") || "[]");
     existingOrders.unshift(newOrderRecord);
     localStorage.setItem("elieudo_orders_db", JSON.stringify(existingOrders));
+  } catch (e) {
+    console.error("Erro no localStorage:", e);
+  }
 
-    // Salvar no Firebase em tempo real (para a cozinha do Elieudo receber na mesma hora)
-    if (typeof fbSaveOrder === "function") {
-      fbSaveOrder(newOrderRecord);
+  // 2. Salvar no Firebase em tempo real (com timeout de segurança)
+  if (typeof fbSaveOrder === "function") {
+    try {
+      await Promise.race([
+        fbSaveOrder(newOrderRecord),
+        new Promise(resolve => setTimeout(resolve, 1800)) // timeout máximo de 1.8s
+      ]);
+    } catch (err) {
+      console.error("Tentativa de envio Firebase:", err);
     }
+  }
 
-    // Notificar painel administrativo em tempo real (fallback local)
-    if (window.BroadcastChannel) {
+  // 3. Notificar abas abertas via BroadcastChannel
+  if (window.BroadcastChannel) {
+    try {
       const channel = new BroadcastChannel("elieudo_orders_bus");
       channel.postMessage({ type: "NEW_ORDER", order: newOrderRecord });
       channel.close();
-    }
-  } catch (e) {
-    console.error("Erro ao salvar pedido:", e);
+    } catch (e) {}
   }
 
-  // Prepara recibo térmico antes de redirecionar
-  prepareThermalReceipt(orderId, name, phone, address, paymentText, subtotal);
+  // 4. Limpar o carrinho
+  appState.cart = [];
+  appState.appliedCoupon = null;
+  saveCartToStorage();
+  updateCartUI();
 
-  // Redireciona para o WhatsApp oficial
+  // 5. Fechar a gaveta do carrinho
+  closeCartDrawer();
+
+  // 6. Restaurar botão
+  if (submitBtn) {
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = `<span>✅ Confirmar & Enviar Pedido</span>`;
+  }
+
+  // 7. Configurar e Exibir o Modal de Sucesso com o Botão de Chamar no WhatsApp
+  const successModal = document.getElementById("order-success-modal");
+  const idEl = document.getElementById("success-order-id");
+  const nameEl = document.getElementById("success-customer-name");
+  const totEl = document.getElementById("success-order-total");
+  const waLink = document.getElementById("btn-whatsapp-success-link");
+
+  if (idEl) idEl.innerText = orderId;
+  if (nameEl) nameEl.innerText = name;
+  if (totEl) totEl.innerText = formatMoney(finalTotal);
+
   const encodedMsg = encodeURIComponent(msg);
-  const whatsappUrl = `https://wa.me/${MENU_DATA.restaurant.phone}?text=${encodedMsg}`;
-  
-  window.open(whatsappUrl, "_blank");
+  // Usa api.whatsapp.com que funciona perfeitamente em mobile e desktop
+  const whatsappUrl = `https://api.whatsapp.com/send?phone=${MENU_DATA.restaurant.phone}&text=${encodedMsg}`;
+
+  if (waLink) {
+    waLink.href = whatsappUrl;
+  }
+
+  if (successModal) {
+    successModal.classList.add("active");
+  }
 }
+window.submitCustomerOrder = submitCustomerOrder;
+window.submitOrderViaWhatsApp = submitCustomerOrder; // retrocompatibilidade
+
+function dismissOrderSuccessModal() {
+  const successModal = document.getElementById("order-success-modal");
+  if (successModal) successModal.classList.remove("active");
+}
+window.dismissOrderSuccessModal = dismissOrderSuccessModal;
 
 // Preparação e Impressão Térmica 80mm
 function prepareThermalReceipt(orderId, name, phone, address, paymentText, subtotal) {

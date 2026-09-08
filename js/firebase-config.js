@@ -121,56 +121,12 @@ function fbSaveOrder(order) {
 
 /**
  * Ouvir pedidos em tempo real (Painel Admin)
+ * Sincronização Híbrida: Nuvem (Firebase) + BroadcastChannel + LocalStorage Event
  */
 function fbListenOrders(onOrdersUpdated, onNewOrderArrived) {
-  // Se Firebase estiver ativo, escuta alterações na nuvem
-  if (isFirebaseReady && fbDb) {
-    const ordersRef = fbDb.ref("orders");
-    let initialLoadDone = false;
-
-    // Escuta todos os pedidos
-    ordersRef.on("value", (snapshot) => {
-      const val = snapshot.val();
-      const list = [];
-      if (val) {
-        Object.keys(val).forEach((key) => {
-          list.push(val[key]);
-        });
-        // Ordena por timestamp decrescente
-        list.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-      }
-      // Atualiza também cache local
-      try {
-        localStorage.setItem("elieudo_orders_db", JSON.stringify(list));
-      } catch (e) {}
-
-      if (typeof onOrdersUpdated === "function") {
-        onOrdersUpdated(list);
-      }
-      initialLoadDone = true;
-    });
-
-    // Notificação sonora apenas para pedidos que chegam após o carregamento inicial
-    ordersRef.on("child_added", (snapshot) => {
-      if (initialLoadDone) {
-        const newOrder = snapshot.val();
-        if (typeof onNewOrderArrived === "function" && newOrder) {
-          onNewOrderArrived(newOrder);
-        }
-      }
-    });
-
-  } else {
-    // Modo Local: Lê do localStorage e usa BroadcastChannel
+  // 1. Sempre escuta o BroadcastChannel (tempo real instantâneo entre abas do mesmo dispositivo)
+  if (window.BroadcastChannel) {
     try {
-      const raw = localStorage.getItem("elieudo_orders_db");
-      const list = raw ? JSON.parse(raw) : [];
-      if (typeof onOrdersUpdated === "function") {
-        onOrdersUpdated(list);
-      }
-    } catch (e) {}
-
-    if (window.BroadcastChannel) {
       const channel = new BroadcastChannel("elieudo_orders_bus");
       channel.onmessage = (evt) => {
         if (evt.data && evt.data.type === "NEW_ORDER") {
@@ -186,7 +142,73 @@ function fbListenOrders(onOrdersUpdated, onNewOrderArrived) {
           } catch (e) {}
         }
       };
+    } catch (e) {}
+  }
+
+  // 2. Sempre escuta o evento nativo de Storage (garantia 100% de atualização sem F5 no mesmo navegador)
+  window.addEventListener("storage", (e) => {
+    if (e.key === "elieudo_orders_db") {
+      try {
+        const raw = e.newValue || localStorage.getItem("elieudo_orders_db");
+        const list = raw ? JSON.parse(raw) : [];
+        if (typeof onOrdersUpdated === "function") {
+          onOrdersUpdated(list);
+        }
+      } catch (err) {}
     }
+  });
+
+  // 3. Se Firebase estiver ativo, escuta alterações remotas na nuvem
+  if (isFirebaseReady && fbDb) {
+    try {
+      const ordersRef = fbDb.ref("orders");
+      let initialLoadDone = false;
+
+      // Escuta todos os pedidos da nuvem
+      ordersRef.on("value", (snapshot) => {
+        const val = snapshot.val();
+        const list = [];
+        if (val) {
+          Object.keys(val).forEach((key) => {
+            list.push(val[key]);
+          });
+          // Ordena por timestamp decrescente
+          list.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        }
+        // Atualiza cache local com os dados da nuvem
+        try {
+          localStorage.setItem("elieudo_orders_db", JSON.stringify(list));
+        } catch (e) {}
+
+        if (typeof onOrdersUpdated === "function") {
+          onOrdersUpdated(list);
+        }
+        initialLoadDone = true;
+      }, (error) => {
+        console.warn("Aviso Firebase (Realtime Database pode não estar criado ainda):", error);
+      });
+
+      // Notificação sonora para novos pedidos na nuvem
+      ordersRef.on("child_added", (snapshot) => {
+        if (initialLoadDone) {
+          const newOrder = snapshot.val();
+          if (typeof onNewOrderArrived === "function" && newOrder) {
+            onNewOrderArrived(newOrder);
+          }
+        }
+      });
+    } catch (err) {
+      console.warn("Falha ao registrar ouvintes do Firebase:", err);
+    }
+  } else {
+    // Carga inicial do cache local se Firebase não estiver pronto
+    try {
+      const raw = localStorage.getItem("elieudo_orders_db");
+      const list = raw ? JSON.parse(raw) : [];
+      if (typeof onOrdersUpdated === "function") {
+        onOrdersUpdated(list);
+      }
+    } catch (e) {}
   }
 }
 
