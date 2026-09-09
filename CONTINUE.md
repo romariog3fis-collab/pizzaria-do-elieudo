@@ -1,6 +1,6 @@
 # 🍕 Pizzaria do Elieudo — Guia de Continuação do Projeto (CONTINUE.md)
 
-Este documento foi criado para registrar com total precisão o estado atual, a arquitetura, as credenciais e o roteiro do projeto para que qualquer desenvolvedor ou agente de Inteligência Artificial possa retomar o trabalho de onde paramos sem atrito.
+Este documento registra com total precisão o estado atual, a arquitetura, as credenciais, o histórico de resoluções e o roteiro do projeto para que qualquer desenvolvedor ou agente de Inteligência Artificial possa retomar o trabalho com clareza e agilidade.
 
 ---
 
@@ -9,46 +9,48 @@ Este documento foi criado para registrar com total precisão o estado atual, a a
 | Recurso | URL | Observações |
 | :--- | :--- | :--- |
 | **Cardápio Digital (Cliente)** | [https://romariog3fis-collab.github.io/pizzaria-do-elieudo/](https://romariog3fis-collab.github.io/pizzaria-do-elieudo/) | Responsivo, otimizado para celular e desktop. |
+| **Rastreamento de Exemplo** | [https://romariog3fis-collab.github.io/pizzaria-do-elieudo/?pedido=2355](https://romariog3fis-collab.github.io/pizzaria-do-elieudo/?pedido=2355) | Exemplo de link com pedido real no Firebase. |
 | **Painel Admin & KDS** | [https://romariog3fis-collab.github.io/pizzaria-do-elieudo/admin.html](https://romariog3fis-collab.github.io/pizzaria-do-elieudo/admin.html) | Tela de Cozinha, Relatórios, Cupons e Cardápio. |
 | **PIN Padrão de Acesso Admin** | **`1234`** | Alterável pelo modal "Alterar PIN" no próprio painel. |
 | **Console Firebase** | [https://console.firebase.google.com/project/pizzaria-do-elieudo/database](https://console.firebase.google.com/project/pizzaria-do-elieudo/database) | Projeto: `pizzaria-do-elieudo` |
+| **Firebase Realtime Database** | `https://pizzaria-do-elieudo-default-rtdb.firebaseio.com/` | Banco em nuvem ativo e sincronizado. |
 | **Repositório GitHub** | [https://github.com/romariog3fis-collab/pizzaria-do-elieudo](https://github.com/romariog3fis-collab/pizzaria-do-elieudo) | Branch principal: `main` |
 
 ---
 
-## 🚀 2. Estado Atual do Sistema (O Que Já Está Feito e 100% Funcional)
+## 🚀 2. Estado Atual do Sistema (100% Funcional e em Produção)
 
 ### ✅ Frente 1: Cardápio Interativo & Checkout Inteligente
-- **Catálogo Completo:** Pizzas tradicionais, especiais, doces, bebidas e bordas recheadas.
-- **Customização de Pedido:** Opção de pizza meio-a-meio (2 sabores), escolha de tamanho (P, M, G, Família), borda recheada, adicionais e campo para observações.
+- **Catálogo Completo:** Pizzas tradicionais, premium, doces, bebidas e bordas recheadas.
+- **Customização de Pedido:** Opção de pizza meio-a-meio (2 sabores), escolha de tamanho (P, M, G, Família/GG), borda recheada, adicionais e campo para observações.
 - **Validação de Cupons de Desconto:**
   - Campo `#input-cart-coupon` no carrinho do cliente com validação em tempo real contra cupons ativos no banco de dados.
   - Exibição destacada do desconto aplicado e cálculo automático do total final.
 - **Fluxo de Checkout em Duas Etapas:**
   1. O cliente preenche os dados (Nome, Telefone, Entrega/Retirada, Pagamento, Troco).
-  2. Clica no botão **`✅ Confirmar & Enviar Pedido`**: o pedido é **imediatamente salvo no Firebase Realtime Database** e na fila local.
-  3. Salva automaticamente o ID do pedido no `localStorage` do dispositivo para rastreamento instantâneo.
+  2. Clica no botão **`✅ Confirmar & Enviar Pedido`**: o pedido é **imediatamente salvo no Firebase Realtime Database** (`/orders/ord_XXXX`) e no `localStorage`.
+  3. Salva o ID do pedido no `localStorage` (`elieudo_last_order_id`) para rastreamento persistente no dispositivo.
   4. Abre o modal comemorativo de confirmação com ID (`#XXXX`), resumo e botões:
-     - **`📲 Enviar Pedido para o WhatsApp`**: abre o WhatsApp com a mensagem formatada para a pizzaria e link de rastreamento.
-     - **`🛵 Acompanhar Pedido em Tempo Real`**: abre diretamente o rastreamento ao vivo.
+     - **`📲 Enviar Pedido para o WhatsApp`**: dispara o WhatsApp com a mensagem formatada contendo o link direto de rastreamento.
+     - **`🛵 Acompanhar Pedido em Tempo Real`**: abre diretamente o modal de acompanhamento ao vivo.
 
 ### ✅ Frente 2: Sistema de Acompanhamento de Pedido em Tempo Real (Order Tracking)
 - **Stepper Visual Dinâmico (4 Etapas):**
   1. 📋 **Pedido Recebido:** Confirmado no sistema, aguardando início do preparo.
-  2. 🔥 **No Forno / Cozinha:** Pizzaiolo abrindo a massa e assando no forno a lenha (com pulso visual âmbar).
+  2. 🔥 **No Forno / Cozinha:** Pizzaiolo montando e assando no forno a lenha (com pulso visual âmbar).
   3. 🛵 / 🏪 **A Caminho / Balcão:**
      - Se Delivery: *"🛵 Saiu para Entrega! O motoboy está em rota para seu endereço."*
      - Se Balcão: *"🏪 Pronto para Retirada no Balcão da Pizzaria!"*
   4. 🎉 **Entregue / Concluído:** Pedido finalizado com sucesso e mensagem de agradecimento.
-- **Sincronização 100% ao Vivo (Zero Reload):**
+- **Sincronização ao Vivo (Zero Reload):**
   - Ouvinte dinâmico `fbListenSingleOrder` no Firebase Realtime Database (`orders/ord_XXXX`).
-  - Atualização instantânea na tela do cliente assim que o administrador altera o status no Kanban KDS.
-  - Fallback offline robusto via `BroadcastChannel` e `localStorage`.
+  - Flag `hasDeliveredData` para blindar o ouvinte contra race conditions e timeouts de rede, prevenindo falsas telas de "pedido não encontrado".
+  - Atualização instantânea na tela do cliente assim que o administrador avança a fase no KDS.
+  - Suporte a busca manual com clique ou pressionando a tecla **Enter** no campo `#track-order-input`.
 - **Múltiplos Pontos de Acesso do Cliente:**
-  - **Link direto na mensagem do WhatsApp:** `/?pedido=5936` (abre o rastreamento automaticamente ao carregar a página).
-  - **Botão no Cabeçalho:** Botão fixo **`🛵 Acompanhar Pedido`** no topo do cardápio digital.
-  - **Barra Flutuante de Pedido Ativo:** Se o cliente já tiver um pedido em andamento no dispositivo, surge uma barra no topo informando o status atual e convidando ao toque para acompanhar.
-  - **Campo de Busca:** Permite digitar qualquer número de pedido (ex: `1264` ou `#1264`) para consultar o status.
+  - **Link Direto (URL Param):** `/?pedido=2355` (carrega e abre o rastreamento automaticamente).
+  - **Botão Fixo no Topo:** Botão **`🛵 Acompanhar Pedido`** no cabeçalho do cardápio digital.
+  - **Barra Flutuante de Pedido Ativo:** Exibida no topo quando o cliente possui um pedido em andamento no dispositivo, com ícone animado e status atualizado.
   - **Botão de Ajuda Direta:** Atalho para chamar a pizzaria no WhatsApp já com mensagem preenchida com o ID do pedido.
 
 ### ✅ Frente 3: Painel Administrativo com Bloqueio por PIN & KDS
@@ -60,9 +62,8 @@ Este documento foi criado para registrar com total precisão o estado atual, a a
   - Ações em cada card: **`🖨️ Forno`** (comanda de cozinha sem preços), **`🧾 Cliente`** (recibo completo), avançar fase e **`📲 Avisar`** (dispara mensagem no WhatsApp do cliente com o link de rastreamento).
 
 ### ✅ Frente 4: Sincronização em Tempo Real (Cross-Device & Cross-Tab)
-- **Zero Reload (Sem F5):** Qualquer pedido realizado pelo celular ou por outra aba chega instantaneamente ao Admin do computador.
 - **Mecanismo Híbrido Triplo:**
-  1. **Firebase Realtime Database:** Ouve os eventos `child_added`, `value` e `child_changed` em `/orders`, `/coupons` e `/admin_pin`.
+  1. **Firebase Realtime Database:** Ouve os nós `/orders`, `/coupons` e `/admin_pin`.
   2. **BroadcastChannel (`elieudo_orders_bus`):** Sincroniza abas abertas no mesmo navegador em 0 milissegundos.
   3. **Storage Event Listener (`window.addEventListener('storage', ...)`):** Redundância local garantida.
 - **Alerta Sonoro:** Notificação por Web Audio API sintetizado a cada novo pedido pendente.
@@ -118,21 +119,19 @@ d:\Antigravity\Pizzaria elieudo\
 
 Para elevar o sistema a um patamar comercial de alto nível (estilo iFood/Zé Delivery), organize as seguintes ações estratégicas:
 
-### 🌟 Ações de Profissionalização da Marca e Infraestrutura:
-
 1. **Domínio Próprio Comercial (`.com.br`):**
    - Registrar domínio exclusivo no [Registro.br](https://registro.br) (ex: `pizzariadoelieudo.com.br` ou `pedir.pizzariadoelieudo.com.br`).
    - Apontar o DNS para a hospedagem, eliminando a URL padrão do GitHub e passando máxima credibilidade na bio do Instagram, WhatsApp e caixas de pizza.
 
 2. **Hospedagem em Vercel ou Firebase Hosting (URLs Limpas & SSL Grátis):**
-   - Os arquivos [`vercel.json`](file:///d:/Antigravity/Pizzaria%20elieudo/vercel.json) e [`firebase.json`](file:///d:/Antigravity/Pizzaria%20elieudo/firebase.json) já estão estruturados no projeto.
+   - Os arquivos [`vercel.json`](file:///d:/Antigravity/Pizzaria%20elieudo/vercel.json) e [`firebase.json`](file:///d:/Antigravity/Pizzaria%20elieudo/firebase.json) já estão configurados no projeto.
    - Habilitar rotas amigáveis (ex: `/admin` diretamente, sem necessidade de `.html`).
    - Conexão do domínio próprio em poucos cliques com certificado SSL (HTTPS) automatizado.
 
 3. **Transformação em PWA (Progressive Web App - "Instale nosso App"):**
    - Criar `manifest.json` e registrar um `service-worker.js`.
    - Adicionar ícones de aplicativo com a logo da pizzaria nos tamanhos 192x192 e 512x512.
-   - Permitir que clientes em Android e iPhone instalem o cardápio na tela inicial do celular, funcionando em tela cheia (standalone) como um app nativo sem precisar pagar taxas à Google Play ou Apple App Store.
+   - Permitir que clientes em Android e iPhone instalem o cardápio na tela inicial do celular em tela cheia (standalone) como um app nativo sem precisar pagar taxas às lojas de aplicativos.
 
 4. **Pagamento PIX Automatizado (QR Code Dinâmico):**
    - Integrar gateway de pagamento (Mercado Pago, Asaas ou OpenPix).
@@ -141,7 +140,7 @@ Para elevar o sistema a um patamar comercial de alto nível (estilo iFood/Zé De
 
 5. **Impressão Térmica Automática de Comandas (Cozinha & Motoboy):**
    - Utilizar a folha de estilo térmica já existente em [`css/admin.css`](file:///d:/Antigravity/Pizzaria%20elieudo/css/admin.css) e [`css/print.css`](file:///d:/Antigravity/Pizzaria%20elieudo/css/print.css).
-   - Adicionar botão de disparo direto de impressão para impressoras térmicas (58mm/80mm como Elgin, Bematech ou Epson) para via do motoboy e filipeta de cozinha.
+   - Adicionar botão de disparo direto de impressão para impressoras térmicas (58mm/80mm) para via do motoboy e filipeta de cozinha.
 
 6. **Gestão de Mesas e Comandas (Modo Salão):**
    - Habilitar abertura rápida de pedidos por número de mesa para atendimento de garçons no salão.
@@ -150,12 +149,9 @@ Para elevar o sistema a um patamar comercial de alto nível (estilo iFood/Zé De
 
 ## 💻 5. Comandos Úteis
 
-### Como rodar localmente no terminal:
+### Como rodar localmente no terminal (Node.js):
 ```powershell
-# Usando Python:
-python -m http.server 8000
-
-# Usando Node.js (npx serve):
+# Usando npx serve:
 npx -y serve .
 ```
 
@@ -165,9 +161,9 @@ git add .
 git commit -m "sua mensagem descritiva"
 git push origin main
 ```
-*O GitHub Pages atualiza automaticamente em menos de 1 minuto após o push.*
+*O GitHub Pages atualiza automaticamente em 1 a 2 minutos após o push.*
 
-### Como publicar via Vercel (Hospedagem Profissional):
+### Como publicar via Vercel:
 ```powershell
 npx -y vercel --prod
 ```
