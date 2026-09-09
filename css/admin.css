@@ -1321,7 +1321,8 @@ body {
   touch-action: manipulation;
 }
 
-.btn-key:active {
+.btn-key:active,
+.btn-key.is-active {
   background: #f59e0b;
   color: #000;
   transform: scale(0.94);
@@ -1338,6 +1339,12 @@ body {
   color: #fff;
 }
 
+.btn-key-action.is-active {
+  background: #334155;
+  color: #f59e0b;
+  transform: scale(0.94);
+}
+
 .btn-unlock-admin {
   width: 100%;
   background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
@@ -1349,11 +1356,13 @@ body {
   font-weight: 800;
   cursor: pointer;
   box-shadow: 0 6px 18px rgba(245, 158, 11, 0.3);
-  transition: transform 0.15s;
+  transition: transform 0.15s, filter 0.15s;
 }
 
-.btn-unlock-admin:active {
+.btn-unlock-admin:active,
+.btn-unlock-admin.is-active {
   transform: scale(0.97);
+  filter: brightness(1.2);
 }
 
 .lockscreen-footer-hint {

@@ -40,6 +40,7 @@ function formatBRL(val) {
 document.addEventListener("DOMContentLoaded", () => {
   checkAdminAuth();
   loadAdminPin();
+  setupPinKeyboardListener();
   loadCoupons();
   loadOrders();
   loadStockStatus();
@@ -1212,10 +1213,22 @@ function loadAdminPin() {
   }
 }
 
+let isVerifyingPin = false;
+
 function appendPinDigit(digit) {
+  if (isVerifyingPin) return;
   if (adminState.enteredPin.length < 8) {
     adminState.enteredPin += digit;
     updatePinDisplay();
+
+    // Se preencheu todos os dígitos do PIN (ex: 4 dígitos), auto-desbloqueia
+    if (adminState.enteredPin.length === adminState.adminPin.length) {
+      setTimeout(() => {
+        if (!adminState.isAuthenticated && !isVerifyingPin) {
+          verifyAdminPin();
+        }
+      }, 120);
+    }
   }
 }
 window.appendPinDigit = appendPinDigit;
@@ -1229,6 +1242,7 @@ function clearPin() {
 window.clearPin = clearPin;
 
 function backspacePin() {
+  if (isVerifyingPin) return;
   if (adminState.enteredPin.length > 0) {
     adminState.enteredPin = adminState.enteredPin.slice(0, -1);
     updatePinDisplay();
@@ -1244,10 +1258,12 @@ function updatePinDisplay() {
 }
 
 function verifyAdminPin() {
+  if (isVerifyingPin) return;
   const errMsg = document.getElementById("pin-error-msg");
   const overlay = document.getElementById("admin-lockscreen-overlay");
   
   if (adminState.enteredPin === adminState.adminPin) {
+    isVerifyingPin = true;
     sessionStorage.setItem("elieudo_admin_authenticated", "true");
     adminState.isAuthenticated = true;
     if (errMsg) errMsg.style.display = "none";
@@ -1257,10 +1273,14 @@ function verifyAdminPin() {
       setTimeout(() => {
         overlay.style.display = "none";
         overlay.style.opacity = "1";
+        isVerifyingPin = false;
       }, 250);
+    } else {
+      isVerifyingPin = false;
     }
     playNotificationBeep();
   } else {
+    isVerifyingPin = true;
     if (errMsg) errMsg.style.display = "block";
     const pinInput = document.getElementById("admin-pin-input");
     if (pinInput) {
@@ -1269,10 +1289,91 @@ function verifyAdminPin() {
     }
     setTimeout(() => {
       clearPin();
+      isVerifyingPin = false;
     }, 800);
   }
 }
 window.verifyAdminPin = verifyAdminPin;
+
+// Feedback visual nos botões virtuais ao teclar pelo teclado físico
+function flashPinKey(digit) {
+  const buttons = document.querySelectorAll(".pin-keypad .btn-key");
+  buttons.forEach((btn) => {
+    if (btn.innerText.trim() === String(digit)) {
+      btn.classList.add("is-active");
+      setTimeout(() => btn.classList.remove("is-active"), 120);
+    }
+  });
+}
+
+function flashPinActionKey(actionText) {
+  const buttons = document.querySelectorAll(".pin-keypad .btn-key");
+  buttons.forEach((btn) => {
+    if (btn.innerText.trim() === actionText) {
+      btn.classList.add("is-active");
+      setTimeout(() => btn.classList.remove("is-active"), 120);
+    }
+  });
+}
+
+// Ouvinte de teclado físico do computador (Desktop / Laptop)
+function setupPinKeyboardListener() {
+  window.addEventListener("keydown", (e) => {
+    const overlay = document.getElementById("admin-lockscreen-overlay");
+    // Interceptar apenas quando a tela de bloqueio estiver visível
+    if (!overlay || overlay.style.display === "none" || adminState.isAuthenticated) {
+      return;
+    }
+
+    // Se o foco estiver em outro campo de texto de algum modal aberto, ignorar
+    if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") && e.target.id !== "admin-pin-input") {
+      return;
+    }
+
+    // Teclas numéricas 0-9 (teclado superior e Numpad)
+    let digit = null;
+    if (/^[0-9]$/.test(e.key)) {
+      digit = e.key;
+    } else if (/^Numpad[0-9]$/.test(e.code)) {
+      digit = e.code.replace("Numpad", "");
+    }
+
+    if (digit !== null) {
+      e.preventDefault();
+      appendPinDigit(digit);
+      flashPinKey(digit);
+      return;
+    }
+
+    // Backspace ou Delete para apagar dígito
+    if (e.key === "Backspace" || e.key === "Delete") {
+      e.preventDefault();
+      backspacePin();
+      flashPinActionKey("⌫");
+      return;
+    }
+
+    // Enter ou NumpadEnter para validar o PIN
+    if (e.key === "Enter" || e.code === "NumpadEnter") {
+      e.preventDefault();
+      const btnUnlock = document.getElementById("btn-unlock-admin");
+      if (btnUnlock) {
+        btnUnlock.classList.add("is-active");
+        setTimeout(() => btnUnlock.classList.remove("is-active"), 150);
+      }
+      verifyAdminPin();
+      return;
+    }
+
+    // Escape ou tecla 'c' / 'C' para limpar o campo
+    if (e.key === "Escape" || e.key.toLowerCase() === "c") {
+      e.preventDefault();
+      clearPin();
+      flashPinActionKey("C");
+      return;
+    }
+  });
+}
 
 function logoutAdmin() {
   if (confirm("Deseja realmente bloquear o painel administrativo?")) {
