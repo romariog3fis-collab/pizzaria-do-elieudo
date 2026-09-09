@@ -41,8 +41,31 @@
           <span>Horário: <strong id="header-hours-text">Terça a Domingo das 18:00 às 23:30</strong></span>
         </div>
       </div>
+
+      <!-- Ações Rápidas do Header -->
+      <div class="header-actions-row">
+        <button type="button" class="btn-header-track" id="btn-header-track" onclick="openOrderTrackingModal()">
+          <span>🛵 Acompanhar Pedido</span>
+        </button>
+      </div>
     </div>
   </header>
+
+  <!-- Barra Flutuante de Pedido Ativo / Em Andamento -->
+  <div id="active-order-floating-banner" class="active-order-banner" style="display: none;" onclick="openOrderTrackingModal()">
+    <div class="active-order-content">
+      <div class="active-order-status-pulse">
+        <span class="active-order-icon" id="floating-banner-icon">🔥</span>
+      </div>
+      <div class="active-order-text">
+        <div class="active-order-headline">
+          <strong id="floating-banner-order-id">#0000</strong> • <span id="floating-banner-status-desc">No Forno / Preparando</span>
+        </div>
+        <div class="active-order-sub">Toque para ver o rastreamento em tempo real ➔</div>
+      </div>
+      <button type="button" class="btn-banner-view">Ver</button>
+    </div>
+  </div>
 
   <!-- Banner de Aviso Quando a Pizzaria Estiver Fechada -->
   <div id="store-closed-banner" class="store-closed-alert" style="display: none;">
@@ -287,9 +310,43 @@
           <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91C2.13 13.66 2.59 15.36 3.45 16.86L2.05 22L7.3 20.62C8.75 21.41 10.38 21.83 12.04 21.83C17.5 21.83 21.95 17.38 21.95 11.92C21.95 9.27 20.92 6.78 19.05 4.91C17.18 3.03 14.69 2 12.04 2M12.05 3.67C14.25 3.67 16.31 4.53 17.87 6.09C19.42 7.65 20.28 9.72 20.28 11.92C20.28 16.46 16.58 20.15 12.04 20.15C10.56 20.15 9.11 19.76 7.85 19L7.55 18.83L4.43 19.65L5.26 16.61L5.06 16.29C4.24 15 3.8 13.47 3.8 11.91C3.81 7.37 7.5 3.67 12.05 3.67Z"/></svg>
           <span>📲 Enviar Pedido para o WhatsApp</span>
         </a>
-        <button type="button" class="btn-new-order-dismiss" onclick="dismissOrderSuccessModal()">
-          🍕 Fazer Novo Pedido
+        <button type="button" class="btn-track-success" id="btn-track-success" onclick="openOrderTrackingFromSuccess()">
+          <span>🛵 Acompanhar Pedido em Tempo Real</span>
         </button>
+        <button type="button" class="btn-new-order-dismiss" onclick="dismissOrderSuccessModal()">
+          🍕 Voltar ao Cardápio
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Acompanhamento de Pedido em Tempo Real (Order Tracking) -->
+  <div class="modal-overlay" id="order-tracking-modal">
+    <div class="modal-content tracking-modal-content">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 1.6rem;">🛵</span>
+          <div>
+            <h2 class="modal-title" style="font-size: 1.25rem;">Acompanhar Pedido</h2>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">Status atualizado ao vivo sem precisar atualizar</p>
+          </div>
+        </div>
+        <button type="button" class="btn-close" onclick="closeOrderTrackingModal()">&times;</button>
+      </div>
+
+      <div class="modal-body tracking-modal-body">
+        
+        <!-- Formulário de Busca de Outro Pedido -->
+        <div class="tracking-search-bar">
+          <input type="text" id="track-order-input" placeholder="Ex: 1264 ou #1264" autocomplete="off" onkeydown="if(event.key==='Enter') trackOrderByInput()" />
+          <button type="button" class="btn-track-search" onclick="trackOrderByInput()">Buscar</button>
+        </div>
+
+        <!-- Conteúdo do Rastreio (Injetado via JS) -->
+        <div id="tracking-main-content">
+          <!-- Renderizado dinamicamente via app.js -->
+        </div>
+
       </div>
     </div>
   </div>

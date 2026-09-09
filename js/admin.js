@@ -263,6 +263,7 @@ function createOrderCardElement(order) {
         <div class="order-total-price">${formatBRL(order.subtotal || 0)}</div>
       </div>
       <div class="order-card-actions">
+        <button class="btn-card-action btn-notify-customer" onclick="notifyCustomerViaWhatsApp('${order.id}')" title="Avisar Cliente no WhatsApp com Link de Rastreio">📲 Avisar</button>
         <button class="btn-card-action" onclick="printKitchenOrder('${order.id}')" title="Imprimir Comanda do Forno">🖨️ Forno</button>
         <button class="btn-card-action" onclick="printReceiptOrder('${order.id}')" title="Imprimir Via do Cliente">🧾 Cliente</button>
         ${nextActionBtn}
@@ -286,6 +287,49 @@ function changeOrderStatus(orderId, newStatus) {
     updateMetrics();
   }
 }
+
+// Notificar Cliente no WhatsApp com Link de Rastreamento em Tempo Real
+function notifyCustomerViaWhatsApp(orderId) {
+  const order = adminState.orders.find(o => o.id === orderId);
+  if (!order || !order.customer || !order.customer.phone) {
+    alert("Telefone do cliente não encontrado neste pedido.");
+    return;
+  }
+
+  const cleanPhone = order.customer.phone.replace(/\D/g, "");
+  const fullPhone = cleanPhone.length <= 11 ? "55" + cleanPhone : cleanPhone;
+  const cleanId = order.id.replace("#", "");
+  
+  // Link direto para a página do cardápio com parâmetro de pedido
+  let baseUrl = window.location.origin && window.location.origin !== "null" && !window.location.href.startsWith("file:")
+    ? window.location.origin + window.location.pathname.replace("admin.html", "index.html")
+    : "https://romariog3fis-collab.github.io/pizzaria-do-elieudo/index.html";
+  const trackingUrl = `${baseUrl}?pedido=${cleanId}`;
+
+  let statusMsg = "";
+  if (order.status === "preparando") {
+    statusMsg = "🔥 Seu pedido já está no *forno a lenha* sendo preparado com todo carinho!";
+  } else if (order.status === "entrega") {
+    if (order.deliveryType === "balcao") {
+      statusMsg = "🏪 Seu pedido está *pronto no balcão* da pizzaria aguardando sua retirada!";
+    } else {
+      statusMsg = "🛵 Seu pedido acabou de sair para *entrega* com nosso motoboy!";
+    }
+  } else if (order.status === "finalizado") {
+    statusMsg = "🎉 Seu pedido foi concluído! Esperamos que aprecie muito sua pizza. Bom apetite!";
+  } else {
+    statusMsg = "📋 Seu pedido foi recebido e já está na fila de preparação.";
+  }
+
+  const msg = `Olá, *${order.customer.name}*! Tudo bem? Aqui é da *Pizzaria do Elieudo*.\n\n` +
+    `Passando para atualizar o status do seu pedido *${order.id}*:\n` +
+    `${statusMsg}\n\n` +
+    `🛵 *Acompanhe em tempo real pelo link:*\n${trackingUrl}`;
+
+  const waUrl = `https://api.whatsapp.com/send?phone=${fullPhone}&text=${encodeURIComponent(msg)}`;
+  window.open(waUrl, "_blank");
+}
+window.notifyCustomerViaWhatsApp = notifyCustomerViaWhatsApp;
 
 // Impressão da Comanda da Cozinha (Sem preços, foco em sabores e alergias)
 function printKitchenOrder(orderId) {

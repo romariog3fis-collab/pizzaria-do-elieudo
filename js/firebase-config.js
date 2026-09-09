@@ -230,9 +230,172 @@ function fbUpdateOrderStatus(orderId, newStatus) {
   // Atualiza no Firebase se conectado
   if (isFirebaseReady && fbDb) {
     const safeKey = orderId.replace("#", "ord_");
-    return fbDb.ref(`orders/${safeKey}/status`).set(newStatus);
+    fbDb.ref(`orders/${safeKey}/status`).set(newStatus);
+  }
+
+  // Notifica abas locais via BroadcastChannel
+  if (window.BroadcastChannel) {
+    try {
+      const channel = new BroadcastChannel("elieudo_orders_bus");
+      channel.postMessage({ type: "ORDER_STATUS_CHANGED", orderId: orderId, newStatus: newStatus });
+      channel.close();
+    } catch (e) {}
   }
   return Promise.resolve();
+}
+
+/**
+ * Ouvir um pedido específico em tempo real para o Cliente (Rastreamento)
+ */
+function fbListenSingleOrder(rawOrderId, onUpdate) {
+  if (!rawOrderId) return () => {};
+  const cleanId = rawOrderId.toString().replace(/^#/, "").replace(/^ord_/, "").trim();
+  const safeKey = "ord_" + cleanId;
+  const hashId = "#" + cleanId;
+
+  let hasDeliveredData = false;
+
+  // 1. Ouvir BroadcastChannel local
+  let channel = null;
+  if (window.BroadcastChannel) {
+    try {
+      channel = new BroadcastChannel("elieudo_orders_bus");
+      channel.onmessage = (evt) => {
+        if (evt.data && (evt.data.orderId === hashId || evt.data.orderId === cleanId)) {
+          fbGetOrderById(hashId).then((ord) => {
+            if (ord && typeof onUpdate === "function") {
+              hasDeliveredData = true;
+              onUpdate(ord);
+            }
+          });
+        }
+      };
+    } catch (e) {}
+  }
+
+  // 2. Ouvir evento storage
+  const storageListener = (e) => {
+    if (e.key === "elieudo_orders_db") {
+      fbGetOrderById(hashId).then((ord) => {
+        if (ord && typeof onUpdate === "function") {
+          hasDeliveredData = true;
+          onUpdate(ord);
+        }
+      });
+    }
+  };
+  window.addEventListener("storage", storageListener);
+
+  // 3. Ouvir Firebase Realtime Database
+  let fbRef = null;
+  let fbCallback = null;
+  if (isFirebaseReady && fbDb) {
+    try {
+      fbRef = fbDb.ref("orders/" + safeKey);
+      fbCallback = (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+          hasDeliveredData = true;
+          if (typeof onUpdate === "function") onUpdate(data);
+        } else {
+          const localOrd = getOrderFromLocalStorage(hashId, cleanId);
+          if (localOrd) {
+            hasDeliveredData = true;
+            if (typeof onUpdate === "function") onUpdate(localOrd);
+          } else if (!hasDeliveredData) {
+            if (typeof onUpdate === "function") onUpdate(null);
+          }
+        }
+      };
+      fbRef.on("value", fbCallback);
+    } catch (err) {
+      console.warn("Erro ao ouvir pedido no Firebase:", err);
+    }
+  }
+
+  // Carga inicial de segurança se Firebase demorar ou estiver desconectado
+  setTimeout(() => {
+    if (!hasDeliveredData) {
+      fbGetOrderById(hashId).then((ord) => {
+        if (ord) {
+          hasDeliveredData = true;
+          if (typeof onUpdate === "function") onUpdate(ord);
+        } else if (!hasDeliveredData) {
+          if (typeof onUpdate === "function") onUpdate(null);
+        }
+      });
+    }
+  }, 2200);
+
+  // Retorna função de cancelamento do listener
+  return () => {
+    if (channel) {
+      try { channel.close(); } catch (e) {}
+    }
+    window.removeEventListener("storage", storageListener);
+    if (fbRef && fbCallback) {
+      try { fbRef.off("value", fbCallback); } catch (e) {}
+    }
+  };
+}
+
+/**
+ * Buscar pedido por ID (Firebase com fallback no LocalStorage e timeout)
+ */
+function fbGetOrderById(rawOrderId) {
+  return new Promise((resolve) => {
+    if (!rawOrderId) return resolve(null);
+    const cleanId = rawOrderId.toString().replace(/^#/, "").replace(/^ord_/, "").trim();
+    const hashId = "#" + cleanId;
+
+    let resolved = false;
+    const timer = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        resolve(getOrderFromLocalStorage(hashId, cleanId));
+      }
+    }, 2200);
+
+    // 1. Tenta Firebase se conectado
+    if (isFirebaseReady && fbDb) {
+      const safeKey = "ord_" + cleanId;
+      fbDb.ref("orders/" + safeKey).once("value")
+        .then((snapshot) => {
+          if (!resolved) {
+            resolved = true;
+            clearTimeout(timer);
+            const val = snapshot.val();
+            if (val) {
+              return resolve(val);
+            }
+            resolve(getOrderFromLocalStorage(hashId, cleanId));
+          }
+        })
+        .catch(() => {
+          if (!resolved) {
+            resolved = true;
+            clearTimeout(timer);
+            resolve(getOrderFromLocalStorage(hashId, cleanId));
+          }
+        });
+    } else {
+      if (!resolved) {
+        resolved = true;
+        clearTimeout(timer);
+        resolve(getOrderFromLocalStorage(hashId, cleanId));
+      }
+    }
+  });
+}
+
+function getOrderFromLocalStorage(hashId, cleanId) {
+  try {
+    const raw = localStorage.getItem("elieudo_orders_db");
+    const list = raw ? JSON.parse(raw) : [];
+    return list.find(o => o.id === hashId || o.id === cleanId || o.id === ("ord_" + cleanId)) || null;
+  } catch (e) {
+    return null;
+  }
 }
 
 /**

@@ -1211,5 +1211,607 @@ body {
   color: #fff;
 }
 
+/* ==========================================================================
+   SISTEMA DE ACOMPANHAMENTO DE PEDIDO (ORDER TRACKING)
+   ========================================================================== */
 
+/* Botão de Rastreio no Header */
+.header-actions-row {
+  margin-top: 14px;
+  display: flex;
+  justify-content: center;
+}
 
+.btn-header-track {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #fbbf24;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 700;
+  padding: 8px 18px;
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.25s ease;
+  backdrop-filter: blur(8px);
+}
+
+.btn-header-track:hover {
+  background: rgba(245, 158, 11, 0.22);
+  border-color: #fbbf24;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.25);
+}
+
+/* Barra Flutuante de Pedido Ativo / Em Andamento */
+.active-order-banner {
+  background: linear-gradient(90deg, #1e293b, #0f172a);
+  border-bottom: 2px solid var(--amber);
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  z-index: 90;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+}
+
+.active-order-banner:hover {
+  background: linear-gradient(90deg, #283548, #131d31);
+}
+
+.active-order-content {
+  max-width: 900px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.active-order-status-pulse {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgba(245, 158, 11, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  animation: pulseAmberHalo 2s infinite;
+  flex-shrink: 0;
+}
+
+@keyframes pulseAmberHalo {
+  0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.5); }
+  70% { box-shadow: 0 0 0 10px rgba(245, 158, 11, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+}
+
+.active-order-text {
+  flex: 1;
+}
+
+.active-order-headline {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.active-order-headline strong {
+  color: var(--amber);
+}
+
+.active-order-sub {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  margin-top: 1px;
+}
+
+.btn-banner-view {
+  background: var(--amber);
+  color: #000;
+  border: none;
+  font-weight: 800;
+  font-size: 0.8rem;
+  padding: 6px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* Botão no Modal de Sucesso Pós-Compra */
+.btn-track-success {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  padding: 13px 20px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: 100%;
+}
+
+.btn-track-success:hover {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: var(--amber);
+  color: var(--amber);
+  transform: translateY(-1px);
+}
+
+/* Modal de Rastreamento */
+.tracking-modal-content {
+  max-width: 540px !important;
+  width: 92%;
+  padding: 0;
+  background: #0f172a;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7);
+}
+
+.tracking-modal-body {
+  padding: 20px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+/* Barra de Busca de Pedido */
+.tracking-search-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 6px;
+  border-radius: 14px;
+  border: 1px solid var(--border-subtle);
+}
+
+.tracking-search-bar input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #fff;
+  padding: 8px 12px;
+  font-size: 0.9rem;
+  font-family: var(--font-body);
+  outline: none;
+}
+
+.tracking-search-bar input::placeholder {
+  color: var(--text-dim);
+}
+
+.btn-track-search {
+  background: var(--amber);
+  color: #000;
+  border: none;
+  font-weight: 800;
+  font-size: 0.85rem;
+  padding: 8px 18px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-track-search:hover {
+  filter: brightness(1.1);
+}
+
+/* Estados de Carregamento & Vazio */
+.tracking-loading-state,
+.tracking-empty-state {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.tracking-empty-icon {
+  font-size: 2.8rem;
+  margin-bottom: 12px;
+}
+
+.tracking-empty-state h3 {
+  color: #fff;
+  font-size: 1.15rem;
+  margin-bottom: 8px;
+}
+
+.tracking-empty-state p {
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  max-width: 360px;
+  margin: 0 auto 18px;
+  line-height: 1.5;
+}
+
+.tracking-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid rgba(245, 158, 11, 0.2);
+  border-top-color: var(--amber);
+  border-radius: 50%;
+  margin: 0 auto 16px;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Card de Status Atual */
+.tracking-current-status-card {
+  border-radius: 16px;
+  padding: 16px 18px;
+  margin-bottom: 22px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border: 1px solid transparent;
+  transition: all 0.3s ease;
+}
+
+.tracking-current-status-card.status-pendente {
+  background: rgba(234, 179, 8, 0.1);
+  border-color: rgba(234, 179, 8, 0.3);
+}
+
+.tracking-current-status-card.status-preparando {
+  background: linear-gradient(135deg, rgba(249, 115, 22, 0.15), rgba(239, 68, 68, 0.15));
+  border-color: rgba(249, 115, 22, 0.4);
+  box-shadow: 0 4px 20px rgba(249, 115, 22, 0.15);
+}
+
+.tracking-current-status-card.status-entrega {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(147, 51, 234, 0.15));
+  border-color: rgba(59, 130, 246, 0.4);
+  box-shadow: 0 4px 20px rgba(59, 130, 246, 0.15);
+}
+
+.tracking-current-status-card.status-balcao {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(59, 130, 246, 0.15));
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+.tracking-current-status-card.status-finalizado {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.35);
+}
+
+.tracking-status-icon-wrap {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.tracking-status-large-icon {
+  font-size: 2rem;
+  animation: floatSubtle 3s ease-in-out infinite;
+}
+
+@keyframes floatSubtle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+.tracking-status-info {
+  flex: 1;
+}
+
+.tracking-step-indicator {
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--amber);
+  display: block;
+  margin-bottom: 2px;
+}
+
+.tracking-status-title {
+  color: #fff;
+  font-size: 1.15rem;
+  font-weight: 800;
+  margin: 0 0 4px 0;
+  font-family: var(--font-heading);
+}
+
+.tracking-status-desc {
+  font-size: 0.82rem;
+  color: #cbd5e1;
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* Stepper Visual (Linha de Tempo) */
+.tracking-stepper-box {
+  position: relative;
+  margin: 24px 8px 30px;
+}
+
+.tracking-stepper-line-bg {
+  position: absolute;
+  top: 18px;
+  left: 20px;
+  right: 20px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  z-index: 1;
+}
+
+.tracking-stepper-line-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #eab308, #f97316, #22c55e);
+  border-radius: 4px;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tracking-steps-row {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  justify-content: space-between;
+}
+
+.tracking-step-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 72px;
+  text-align: center;
+}
+
+.step-circle {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #1e293b;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  color: var(--text-dim);
+  font-weight: 800;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  margin-bottom: 6px;
+}
+
+.step-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  transition: color 0.3s;
+}
+
+/* Concluído */
+.tracking-step-node.completed .step-circle {
+  background: #16a34a;
+  border-color: #22c55e;
+  color: #fff;
+}
+
+.tracking-step-node.completed .step-label {
+  color: #86efac;
+}
+
+/* Atual / Em Andamento */
+.tracking-step-node.current .step-circle {
+  background: var(--amber);
+  border-color: #fbbf24;
+  color: #000;
+  transform: scale(1.15);
+  animation: pulseCircleGlow 1.8s infinite;
+}
+
+.tracking-step-node.current .step-label {
+  color: #fbbf24;
+  font-weight: 800;
+}
+
+@keyframes pulseCircleGlow {
+  0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.6); }
+  70% { box-shadow: 0 0 0 10px rgba(245, 158, 11, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+}
+
+/* Card de Detalhes do Pedido */
+.tracking-details-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.tracking-details-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.tracking-order-badge {
+  font-family: var(--font-heading);
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--amber);
+  margin-right: 6px;
+}
+
+.tracking-time-badge {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+.tracking-type-badge {
+  font-size: 0.75rem;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+
+.badge-delivery {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.badge-balcao {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.tracking-customer-box {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px dashed var(--border-subtle);
+}
+
+.customer-row {
+  display: flex;
+  gap: 6px;
+}
+
+.customer-row strong {
+  color: #cbd5e1;
+  min-width: 75px;
+}
+
+.customer-row span {
+  color: #fff;
+}
+
+.tracking-items-summary {
+  margin-bottom: 12px;
+}
+
+.tracking-items-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.tracking-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tracking-item-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 0.85rem;
+}
+
+.tracking-item-qty {
+  font-weight: 700;
+  color: var(--amber);
+}
+
+.tracking-item-name {
+  flex: 1;
+  color: #f1f5f9;
+}
+
+.tracking-item-sub {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  margin-top: 1px;
+}
+
+.tracking-item-price {
+  font-weight: 600;
+  color: #94a3b8;
+  font-size: 0.8rem;
+}
+
+.tracking-total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-subtle);
+  font-size: 0.95rem;
+}
+
+.tracking-total-row span {
+  color: #cbd5e1;
+  font-weight: 600;
+}
+
+.tracking-total-row strong {
+  font-family: var(--font-heading);
+  font-size: 1.25rem;
+  color: var(--amber);
+}
+
+/* Rodapé de Ações de Suporte */
+.tracking-actions-footer {
+  display: flex;
+  gap: 10px;
+}
+
+.btn-tracking-whatsapp {
+  flex: 1;
+  background: #25d366;
+  color: #fff;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 12px 14px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s;
+}
+
+.btn-tracking-whatsapp:hover {
+  background: #20ba5a;
+  transform: translateY(-1px);
+}
+
+.btn-tracking-refresh {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--border-subtle);
+  color: #fff;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-tracking-refresh:hover {
+  background: rgba(255, 255, 255, 0.12);
+}

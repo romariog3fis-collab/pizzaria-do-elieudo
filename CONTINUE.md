@@ -27,14 +27,39 @@ Este documento foi criado para registrar com total precisão o estado atual, a a
 - **Fluxo de Checkout em Duas Etapas:**
   1. O cliente preenche os dados (Nome, Telefone, Entrega/Retirada, Pagamento, Troco).
   2. Clica no botão **`✅ Confirmar & Enviar Pedido`**: o pedido é **imediatamente salvo no Firebase Realtime Database** e na fila local.
-  3. Abre o modal comemorativo de confirmação com ID do pedido (`#XXXX`), resumo e botão pulsante **`📲 Enviar Pedido para o WhatsApp`**, que abre o WhatsApp já com a mensagem formatada para a pizzaria.
+  3. Salva automaticamente o ID do pedido no `localStorage` do dispositivo para rastreamento instantâneo.
+  4. Abre o modal comemorativo de confirmação com ID (`#XXXX`), resumo e botões:
+     - **`📲 Enviar Pedido para o WhatsApp`**: abre o WhatsApp com a mensagem formatada para a pizzaria e link de rastreamento.
+     - **`🛵 Acompanhar Pedido em Tempo Real`**: abre diretamente o rastreamento ao vivo.
 
-### ✅ Frente 2: Painel Administrativo com Bloqueio por PIN
+### ✅ Frente 2: Sistema de Acompanhamento de Pedido em Tempo Real (Order Tracking)
+- **Stepper Visual Dinâmico (4 Etapas):**
+  1. 📋 **Pedido Recebido:** Confirmado no sistema, aguardando início do preparo.
+  2. 🔥 **No Forno / Cozinha:** Pizzaiolo abrindo a massa e assando no forno a lenha (com pulso visual âmbar).
+  3. 🛵 / 🏪 **A Caminho / Balcão:**
+     - Se Delivery: *"🛵 Saiu para Entrega! O motoboy está em rota para seu endereço."*
+     - Se Balcão: *"🏪 Pronto para Retirada no Balcão da Pizzaria!"*
+  4. 🎉 **Entregue / Concluído:** Pedido finalizado com sucesso e mensagem de agradecimento.
+- **Sincronização 100% ao Vivo (Zero Reload):**
+  - Ouvinte dinâmico `fbListenSingleOrder` no Firebase Realtime Database (`orders/ord_XXXX`).
+  - Atualização instantânea na tela do cliente assim que o administrador altera o status no Kanban KDS.
+  - Fallback offline robusto via `BroadcastChannel` e `localStorage`.
+- **Múltiplos Pontos de Acesso do Cliente:**
+  - **Link direto na mensagem do WhatsApp:** `/?pedido=5936` (abre o rastreamento automaticamente ao carregar a página).
+  - **Botão no Cabeçalho:** Botão fixo **`🛵 Acompanhar Pedido`** no topo do cardápio digital.
+  - **Barra Flutuante de Pedido Ativo:** Se o cliente já tiver um pedido em andamento no dispositivo, surge uma barra no topo informando o status atual e convidando ao toque para acompanhar.
+  - **Campo de Busca:** Permite digitar qualquer número de pedido (ex: `1264` ou `#1264`) para consultar o status.
+  - **Botão de Ajuda Direta:** Atalho para chamar a pizzaria no WhatsApp já com mensagem preenchida com o ID do pedido.
+
+### ✅ Frente 3: Painel Administrativo com Bloqueio por PIN & KDS
 - **Lockscreen Dark Glassmorphic:** Teclado numérico touch com suporte a clique e digitação física no teclado.
 - **Autenticação em Sessão:** Guarda estado autenticado via `sessionStorage`.
 - **Botão de Logout e Alteração de PIN:** Permite redefinir a senha numérica (com confirmação da senha atual) e sincroniza a nova senha na nuvem e localmente.
+- **Kanban KDS Operacional (4 Colunas):**
+  - Colunas: *1. Pendentes*, *2. No Forno / Cozinha*, *3. Saiu p/ Entrega*, *4. Finalizados*.
+  - Ações em cada card: **`🖨️ Forno`** (comanda de cozinha sem preços), **`🧾 Cliente`** (recibo completo), avançar fase e **`📲 Avisar`** (dispara mensagem no WhatsApp do cliente com o link de rastreamento).
 
-### ✅ Frente 3: Sincronização em Tempo Real (Cross-Device & Cross-Tab)
+### ✅ Frente 4: Sincronização em Tempo Real (Cross-Device & Cross-Tab)
 - **Zero Reload (Sem F5):** Qualquer pedido realizado pelo celular ou por outra aba chega instantaneamente ao Admin do computador.
 - **Mecanismo Híbrido Triplo:**
   1. **Firebase Realtime Database:** Ouve os eventos `child_added`, `value` e `child_changed` em `/orders`, `/coupons` e `/admin_pin`.
@@ -42,13 +67,13 @@ Este documento foi criado para registrar com total precisão o estado atual, a a
   3. **Storage Event Listener (`window.addEventListener('storage', ...)`):** Redundância local garantida.
 - **Alerta Sonoro:** Notificação por Web Audio API sintetizado a cada novo pedido pendente.
 
-### ✅ Frente 4: Motor de Cupons & Promoções (Admin)
+### ✅ Frente 5: Motor de Cupons & Promoções (Admin)
 - Aba dedicada no painel (`#tab-coupons`):
   - Formulário para criar cupom: Código (ex: `PIZZA10`), Tipo (% ou R$), Valor, Pedido Mínimo.
   - Tabela com status (Ativo / Pausado) e botão de Excluir.
   - Sincronizado automaticamente com o Firebase.
 
-### ✅ Frente 5: Relatórios Financeiros & Fechamento de Caixa
+### ✅ Frente 6: Relatórios Financeiros & Fechamento de Caixa
 - Aba dedicada no painel (`#tab-reports`):
   - **Filtros rápidos:** Hoje, Ontem, Últimos 7 Dias, Este Mês, Todo o Histórico.
   - **Cards de Métricas:** Faturamento Bruto, Ticket Médio, Total de Descontos e Total em Taxas de Entrega.
@@ -66,17 +91,19 @@ Este documento foi criado para registrar com total precisão o estado atual, a a
 ```text
 d:\Antigravity\Pizzaria elieudo\
 │
-├── index.html               # Aplicação do Cliente: Cardápio, Carrinho e Modal de Sucesso
-├── admin.html               # Painel Admin: Lockscreen PIN, KDS, Cupons, Relatórios e Cardápio
+├── index.html               # Cardápio Digital, Carrinho, Modal de Sucesso e Modal de Rastreamento
+├── admin.html               # Painel Admin: Lockscreen PIN, Kanban KDS, Cupons, Relatórios e Cardápio
 │
 ├── css/
-│   ├── style.css            # Estilo do Cardápio: Dark Glassmorphism, responsividade mobile
-│   └── admin.css            # Estilos do Painel Admin, KDS, Lockscreen, Cupons e Impressão Térmica
+│   ├── style.css            # Estilo do Cardápio: Dark Glassmorphism, Stepper de Rastreamento e Banners
+│   ├── admin.css            # Estilos do Painel Admin, KDS, Lockscreen, Cupons e Impressão Térmica
+│   └── print.css            # Folha de estilo para impressão térmica 80mm de comandas
 │
 ├── js/
-│   ├── app.js               # Lógica do Cliente: carrinho, cupons, modal de confirmação e WhatsApp
-│   ├── admin.js             # Lógica do Admin: KDS, relatórios, fechamento de caixa, PIN e cupons
-│   └── firebase-config.js   # Sincronização em Nuvem (Firebase RTDB) + Fallback Local
+│   ├── app.js               # Lógica do Cliente: carrinho, cupons, checkout, WhatsApp e Order Tracking
+│   ├── admin.js             # Lógica do Admin: KDS, relatórios, fechamento de caixa, PIN, cupons e avisos WhatsApp
+│   ├── firebase-config.js   # Sincronização em Nuvem (Firebase RTDB), ouvintes de pedidos e Fallback Local
+│   └── menu-data.js         # Base inicial de produtos, categorias, tamanhos e dados da pizzaria
 │
 ├── assets/                  # Imagens, logomarcas e ícones da pizzaria
 ├── database.rules.json      # Regras de segurança do Firebase Realtime Database
@@ -87,23 +114,37 @@ d:\Antigravity\Pizzaria elieudo\
 
 ---
 
-## 🔧 4. Roteiro para o Próximo Desenvolvedor / IA
+## 🔧 4. Roteiro de Profissionalização & Próximos Passos
 
-Se você for dar continuidade a este projeto, aqui estão as principais tarefas sugeridas e prontas para expansão:
+Para elevar o sistema a um patamar comercial de alto nível (estilo iFood/Zé Delivery), organize as seguintes ações estratégicas:
 
-### 💡 Sugestões de Próximos Passos:
+### 🌟 Ações de Profissionalização da Marca e Infraestrutura:
 
-1. **Notificação de Rastreio para o Cliente via WhatsApp:**
-   - No Admin KDS, ao clicar em *"Saiu para Entrega"*, gerar um link direto para avisar o cliente no WhatsApp dele que o pedido já está a caminho com o motoboy.
+1. **Domínio Próprio Comercial (`.com.br`):**
+   - Registrar domínio exclusivo no [Registro.br](https://registro.br) (ex: `pizzariadoelieudo.com.br` ou `pedir.pizzariadoelieudo.com.br`).
+   - Apontar o DNS para a hospedagem, eliminando a URL padrão do GitHub e passando máxima credibilidade na bio do Instagram, WhatsApp e caixas de pizza.
 
-2. **Integração com Mercado Pago (PIX Automático):**
-   - Implementar geração de QR Code dinâmico do PIX via API do Mercado Pago / OpenPix, liberando o pedido automaticamente após confirmação de pagamento.
+2. **Hospedagem em Vercel ou Firebase Hosting (URLs Limpas & SSL Grátis):**
+   - Os arquivos [`vercel.json`](file:///d:/Antigravity/Pizzaria%20elieudo/vercel.json) e [`firebase.json`](file:///d:/Antigravity/Pizzaria%20elieudo/firebase.json) já estão estruturados no projeto.
+   - Habilitar rotas amigáveis (ex: `/admin` diretamente, sem necessidade de `.html`).
+   - Conexão do domínio próprio em poucos cliques com certificado SSL (HTTPS) automatizado.
 
-3. **Impressão Automática de Pedidos de Cozinha:**
-   - Adicionar botão de impressão individual de comanda de cozinha (80mm/58mm) direto do card do KDS, facilitando o trabalho do pizzaiolo.
+3. **Transformação em PWA (Progressive Web App - "Instale nosso App"):**
+   - Criar `manifest.json` e registrar um `service-worker.js`.
+   - Adicionar ícones de aplicativo com a logo da pizzaria nos tamanhos 192x192 e 512x512.
+   - Permitir que clientes em Android e iPhone instalem o cardápio na tela inicial do celular, funcionando em tela cheia (standalone) como um app nativo sem precisar pagar taxas à Google Play ou Apple App Store.
 
-4. **Gestão de Mesas / Comandas (Modo Salão):**
-   - Permitir que garçons abram pedidos por número de mesa sem exigir endereço de entrega.
+4. **Pagamento PIX Automatizado (QR Code Dinâmico):**
+   - Integrar gateway de pagamento (Mercado Pago, Asaas ou OpenPix).
+   - Gerar QR Code dinâmico e código "Copia e Cola" com confirmação via webhook em tempo real.
+   - O KDS da cozinha altera automaticamente o status do pedido para "Pago - Em Preparação" assim que o banco aprova o recebimento.
+
+5. **Impressão Térmica Automática de Comandas (Cozinha & Motoboy):**
+   - Utilizar a folha de estilo térmica já existente em [`css/admin.css`](file:///d:/Antigravity/Pizzaria%20elieudo/css/admin.css) e [`css/print.css`](file:///d:/Antigravity/Pizzaria%20elieudo/css/print.css).
+   - Adicionar botão de disparo direto de impressão para impressoras térmicas (58mm/80mm como Elgin, Bematech ou Epson) para via do motoboy e filipeta de cozinha.
+
+6. **Gestão de Mesas e Comandas (Modo Salão):**
+   - Habilitar abertura rápida de pedidos por número de mesa para atendimento de garçons no salão.
 
 ---
 
@@ -125,3 +166,14 @@ git commit -m "sua mensagem descritiva"
 git push origin main
 ```
 *O GitHub Pages atualiza automaticamente em menos de 1 minuto após o push.*
+
+### Como publicar via Vercel (Hospedagem Profissional):
+```powershell
+npx -y vercel --prod
+```
+
+### Como publicar via Firebase Hosting:
+```powershell
+firebase deploy --only hosting
+```
+

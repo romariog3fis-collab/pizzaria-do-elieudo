@@ -42,6 +42,7 @@ document.addEventListener("DOMContentLoaded", () => {
   loadCartFromStorage();
   updateCartUI();
   updateStoreStatusUI();
+  initOrderTracking();
 });
 
 // Sincronização em Tempo Real (Firebase & Fallback Local)
@@ -991,6 +992,13 @@ async function submitCustomerOrder() {
     msg += `🔑 *Chave PIX da Pizzaria:* ${MENU_DATA.restaurant.pixKey}\n`;
   }
 
+  const cleanId = orderId.replace('#', '');
+  let baseUrl = window.location.href.split('?')[0].split('#')[0];
+  if (!baseUrl || baseUrl.startsWith("file:") || window.location.origin === "null") {
+    baseUrl = "https://romariog3fis-collab.github.io/pizzaria-do-elieudo/";
+  }
+  const trackingUrl = `${baseUrl}?pedido=${cleanId}`;
+  msg += `🛵 *Acompanhe seu pedido em tempo real:*\n${trackingUrl}\n`;
   msg += `-------------------------------------------\n`;
   msg += `_Enviado pelo Cardápio Digital Elieudo_`;
 
@@ -1021,6 +1029,7 @@ async function submitCustomerOrder() {
     const existingOrders = JSON.parse(localStorage.getItem("elieudo_orders_db") || "[]");
     existingOrders.unshift(newOrderRecord);
     localStorage.setItem("elieudo_orders_db", JSON.stringify(existingOrders));
+    localStorage.setItem("elieudo_last_order_id", orderId);
   } catch (e) {
     console.error("Erro no localStorage:", e);
   }
@@ -1205,3 +1214,399 @@ function setupEventListeners() {
   const btnPrint = document.getElementById("btn-print-receipt");
   if (btnPrint) btnPrint.onclick = printThermalReceipt;
 }
+
+// ==========================================================================
+// MÓDULO DE RASTREAMENTO DE PEDIDO EM TEMPO REAL (ORDER TRACKING)
+// ==========================================================================
+
+let activeTrackingUnsubscribe = null;
+let currentTrackingOrderId = null;
+
+function initOrderTracking() {
+  // 1. Checa se veio parâmetro de URL (ex: ?pedido=1264 ou ?tracking=1264)
+  const params = new URLSearchParams(window.location.search);
+  const orderParam = params.get("pedido") || params.get("tracking") || params.get("order");
+
+  if (orderParam) {
+    // Abre direto o modal com o pedido especificado
+    setTimeout(() => {
+      openOrderTrackingModal(orderParam);
+    }, 400);
+  } else {
+    // Checa se há pedido ativo salvo para exibir a barra flutuante
+    checkActiveOrderBanner();
+  }
+
+  // 2. Ouve eventos locais para atualizar a barra flutuante em tempo real
+  if (window.BroadcastChannel) {
+    try {
+      const channel = new BroadcastChannel("elieudo_orders_bus");
+      channel.onmessage = (evt) => {
+        if (evt.data && evt.data.type === "ORDER_STATUS_CHANGED") {
+          checkActiveOrderBanner();
+        }
+      };
+    } catch (e) {}
+  }
+
+  window.addEventListener("storage", (e) => {
+    if (e.key === "elieudo_orders_db" || e.key === "elieudo_last_order_id") {
+      checkActiveOrderBanner();
+    }
+  });
+}
+
+/**
+ * Abre o rastreamento a partir do modal de sucesso pós-pedido
+ */
+function openOrderTrackingFromSuccess() {
+  const lastId = localStorage.getItem("elieudo_last_order_id");
+  dismissOrderSuccessModal();
+  openOrderTrackingModal(lastId);
+}
+window.openOrderTrackingFromSuccess = openOrderTrackingFromSuccess;
+
+/**
+ * Abre o Modal de Rastreamento de Pedido
+ */
+function openOrderTrackingModal(rawOrderId) {
+  const modal = document.getElementById("order-tracking-modal");
+  const inputEl = document.getElementById("track-order-input");
+  if (!modal) return;
+
+  // Cancela ouvinte anterior se houver
+  if (typeof activeTrackingUnsubscribe === "function") {
+    activeTrackingUnsubscribe();
+    activeTrackingUnsubscribe = null;
+  }
+
+  let orderId = rawOrderId || localStorage.getItem("elieudo_last_order_id");
+
+  modal.classList.add("active");
+
+  if (orderId) {
+    const cleanId = orderId.toString().replace(/^#/, "").replace(/^ord_/, "").trim();
+    if (inputEl) inputEl.value = "#" + cleanId;
+    currentTrackingOrderId = "#" + cleanId;
+
+    renderTrackingLoading();
+
+    // Inicia ouvinte em tempo real no Firebase + local
+    if (typeof fbListenSingleOrder === "function") {
+      activeTrackingUnsubscribe = fbListenSingleOrder(cleanId, (orderData) => {
+        if (orderData) {
+          renderOrderTrackingUI(orderData);
+          checkActiveOrderBanner();
+        } else {
+          renderTrackingNotFound(cleanId);
+        }
+      });
+    } else {
+      // Fallback buscando direto
+      if (typeof fbGetOrderById === "function") {
+        fbGetOrderById(cleanId).then((orderData) => {
+          if (orderData) renderOrderTrackingUI(orderData);
+          else renderTrackingNotFound(cleanId);
+        });
+      }
+    }
+  } else {
+    // Sem pedido recente, exibe formulário de busca
+    if (inputEl) inputEl.value = "";
+    renderTrackingEmptySearch();
+  }
+}
+window.openOrderTrackingModal = openOrderTrackingModal;
+
+/**
+ * Fecha o modal de rastreamento
+ */
+function closeOrderTrackingModal() {
+  const modal = document.getElementById("order-tracking-modal");
+  if (modal) modal.classList.remove("active");
+
+  if (typeof activeTrackingUnsubscribe === "function") {
+    activeTrackingUnsubscribe();
+    activeTrackingUnsubscribe = null;
+  }
+}
+window.closeOrderTrackingModal = closeOrderTrackingModal;
+
+/**
+ * Busca pelo input do usuário
+ */
+function trackOrderByInput() {
+  const input = document.getElementById("track-order-input");
+  if (!input || !input.value.trim()) {
+    alert("Por favor, digite o número do pedido (ex: 1264).");
+    return;
+  }
+  openOrderTrackingModal(input.value.trim());
+}
+window.trackOrderByInput = trackOrderByInput;
+
+/**
+ * Renderiza estado de carregando
+ */
+function renderTrackingLoading() {
+  const container = document.getElementById("tracking-main-content");
+  if (!container) return;
+  container.innerHTML = `
+    <div class="tracking-loading-state">
+      <div class="tracking-spinner"></div>
+      <p>Localizando informações do seu pedido...</p>
+    </div>
+  `;
+}
+
+/**
+ * Renderiza estado vazio para digitar código
+ */
+function renderTrackingEmptySearch() {
+  const container = document.getElementById("tracking-main-content");
+  if (!container) return;
+  container.innerHTML = `
+    <div class="tracking-empty-state">
+      <div class="tracking-empty-icon">🔍</div>
+      <h3>Digite o código do seu pedido</h3>
+      <p>Digite o número do seu pedido acima (ex: 1264) para acompanhar a preparação e entrega em tempo real.</p>
+    </div>
+  `;
+}
+
+/**
+ * Renderiza estado de pedido não encontrado
+ */
+function renderTrackingNotFound(searchedId) {
+  const container = document.getElementById("tracking-main-content");
+  if (!container) return;
+  container.innerHTML = `
+    <div class="tracking-empty-state">
+      <div class="tracking-empty-icon">❓</div>
+      <h3>Pedido #${searchedId} não encontrado</h3>
+      <p>Verifique se digitou o número corretamente ou clique abaixo para falar diretamente com nossa equipe no WhatsApp.</p>
+      <a href="https://api.whatsapp.com/send?phone=${MENU_DATA.restaurant.phone}&text=${encodeURIComponent(`Olá! Preciso de ajuda para localizar meu pedido #${searchedId}`)}" target="_blank" class="btn-tracking-whatsapp">
+        <span>📲 Falar no WhatsApp da Pizzaria</span>
+      </a>
+    </div>
+  `;
+}
+
+/**
+ * Renderiza a interface do Pedido e o Stepper das 4 Etapas
+ */
+function renderOrderTrackingUI(order) {
+  const container = document.getElementById("tracking-main-content");
+  if (!container || !order) return;
+
+  const st = (order.status || "pendente").toLowerCase();
+  const isDelivery = order.deliveryType !== "balcao";
+
+  // Mapeamento das 4 etapas
+  // 1: pendente, 2: preparando, 3: entrega, 4: finalizado
+  let activeStepNum = 1;
+  let currentStatusBadge = {
+    title: "Pedido Recebido",
+    desc: "Seu pedido foi registrado e aguarda confirmação e entrada no forno.",
+    icon: "📋",
+    colorClass: "status-pendente"
+  };
+
+  if (st === "preparando") {
+    activeStepNum = 2;
+    currentStatusBadge = {
+      title: "No Forno / Cozinha",
+      desc: "O pizzaiolo já está montando e assando suas pizzas no forno a lenha quentinho!",
+      icon: "🔥",
+      colorClass: "status-preparando"
+    };
+  } else if (st === "entrega") {
+    activeStepNum = 3;
+    if (isDelivery) {
+      currentStatusBadge = {
+        title: "Saiu para Entrega!",
+        desc: "O motoboy já recolheu sua pizza e está em rota para o seu endereço.",
+        icon: "🛵",
+        colorClass: "status-entrega"
+      };
+    } else {
+      currentStatusBadge = {
+        title: "Pronto para Retirada no Balcão!",
+        desc: "Sua pizza está pronta e quentinha aguardando sua retirada no balcão da pizzaria.",
+        icon: "🏪",
+        colorClass: "status-balcao"
+      };
+    }
+  } else if (st === "finalizado") {
+    activeStepNum = 4;
+    currentStatusBadge = {
+      title: "Pedido Concluído!",
+      desc: "Pedido finalizado com sucesso. Muito obrigado pela preferência e bom apetite!",
+      icon: "🎉",
+      colorClass: "status-finalizado"
+    };
+  }
+
+  // Progresso da linha conectora: 1->0%, 2->33.3%, 3->66.6%, 4->100%
+  const progressPercent = Math.min(100, Math.round(((activeStepNum - 1) / 3) * 100));
+
+  // WhatsApp de suporte pré-configurado
+  const whatsappHelpUrl = `https://api.whatsapp.com/send?phone=${MENU_DATA.restaurant.phone}&text=${encodeURIComponent(`Olá! Gostaria de informações sobre o meu pedido ${order.id}.`)}`;
+
+  container.innerHTML = `
+    <!-- Card do Status Atual com Animação -->
+    <div class="tracking-current-status-card ${currentStatusBadge.colorClass}">
+      <div class="tracking-status-icon-wrap">
+        <span class="tracking-status-large-icon">${currentStatusBadge.icon}</span>
+      </div>
+      <div class="tracking-status-info">
+        <span class="tracking-step-indicator">ETAPA ${activeStepNum} DE 4</span>
+        <h3 class="tracking-status-title">${currentStatusBadge.title}</h3>
+        <p class="tracking-status-desc">${currentStatusBadge.desc}</p>
+      </div>
+    </div>
+
+    <!-- Stepper Visual Interativo (Linha de Tempo) -->
+    <div class="tracking-stepper-box">
+      <div class="tracking-stepper-line-bg">
+        <div class="tracking-stepper-line-fill" style="width: ${progressPercent}%;"></div>
+      </div>
+      <div class="tracking-steps-row">
+        
+        <!-- Passo 1: Recebido -->
+        <div class="tracking-step-node ${activeStepNum >= 1 ? 'completed' : ''} ${activeStepNum === 1 ? 'current' : ''}">
+          <div class="step-circle">
+            ${activeStepNum > 1 ? '✓' : '1'}
+          </div>
+          <span class="step-label">Recebido</span>
+        </div>
+
+        <!-- Passo 2: No Forno -->
+        <div class="tracking-step-node ${activeStepNum >= 2 ? 'completed' : ''} ${activeStepNum === 2 ? 'current' : ''}">
+          <div class="step-circle">
+            ${activeStepNum > 2 ? '✓' : '2'}
+          </div>
+          <span class="step-label">No Forno</span>
+        </div>
+
+        <!-- Passo 3: Em Rota / Pronto -->
+        <div class="tracking-step-node ${activeStepNum >= 3 ? 'completed' : ''} ${activeStepNum === 3 ? 'current' : ''}">
+          <div class="step-circle">
+            ${activeStepNum > 3 ? '✓' : '3'}
+          </div>
+          <span class="step-label">${isDelivery ? 'A Caminho' : 'Balcão'}</span>
+        </div>
+
+        <!-- Passo 4: Entregue -->
+        <div class="tracking-step-node ${activeStepNum >= 4 ? 'completed' : ''} ${activeStepNum === 4 ? 'current' : ''}">
+          <div class="step-circle">
+            ${activeStepNum >= 4 ? '✓' : '4'}
+          </div>
+          <span class="step-label">Entregue</span>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Resumo dos Dados do Pedido -->
+    <div class="tracking-details-card">
+      <div class="tracking-details-header">
+        <div>
+          <span class="tracking-order-badge">${order.id}</span>
+          <span class="tracking-time-badge">🕒 ${order.timeStr || ''}</span>
+        </div>
+        <span class="tracking-type-badge ${isDelivery ? 'badge-delivery' : 'badge-balcao'}">
+          ${isDelivery ? '🛵 Entrega' : '🏪 Balcão'}
+        </span>
+      </div>
+
+      <div class="tracking-customer-box">
+        <div class="customer-row"><strong>Cliente:</strong> <span>${(order.customer && order.customer.name) || 'Cliente'}</span></div>
+        ${order.customer && order.customer.phone ? `<div class="customer-row"><strong>Telefone:</strong> <span>${order.customer.phone}</span></div>` : ''}
+        ${isDelivery && order.customer && order.customer.address ? `<div class="customer-row"><strong>Endereço:</strong> <span>📍 ${order.customer.address}</span></div>` : ''}
+        ${isDelivery && order.customer && order.customer.reference ? `<div class="customer-row"><strong>Ponto de Ref:</strong> <span>📌 ${order.customer.reference}</span></div>` : ''}
+        <div class="customer-row"><strong>Pagamento:</strong> <span>${order.paymentMethod || 'A combinar'}</span></div>
+      </div>
+
+      <div class="tracking-items-summary">
+        <div class="tracking-items-title">Itens do Pedido:</div>
+        <div class="tracking-items-list">
+          ${(order.items || []).map(item => `
+            <div class="tracking-item-row">
+              <span class="tracking-item-qty">${item.quantity}x</span>
+              <div class="tracking-item-name">
+                <div>${item.flavorDescription || item.name}</div>
+                ${item.details ? `<div class="tracking-item-sub">${item.details}</div>` : ''}
+              </div>
+              <span class="tracking-item-price">${formatMoney(item.totalPrice)}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="tracking-total-row">
+        <span>Total:</span>
+        <strong>${formatMoney(order.totalPrice || order.subtotal || 0)}</strong>
+      </div>
+    </div>
+
+    <!-- Ações de Suporte e Recarregamento -->
+    <div class="tracking-actions-footer">
+      <a href="${whatsappHelpUrl}" target="_blank" class="btn-tracking-whatsapp">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91C2.13 13.66 2.59 15.36 3.45 16.86L2.05 22L7.3 20.62C8.75 21.41 10.38 21.83 12.04 21.83C17.5 21.83 21.95 17.38 21.95 11.92C21.95 9.27 20.92 6.78 19.05 4.91C17.18 3.03 14.69 2 12.04 2M12.05 3.67C14.25 3.67 16.31 4.53 17.87 6.09C19.42 7.65 20.28 9.72 20.28 11.92C20.28 16.46 16.58 20.15 12.04 20.15C10.56 20.15 9.11 19.76 7.85 19L7.55 18.83L4.43 19.65L5.26 16.61L5.06 16.29C4.24 15 3.8 13.47 3.8 11.91C3.81 7.37 7.5 3.67 12.05 3.67Z"/></svg>
+        <span>Falar com a Pizzaria</span>
+      </a>
+      <button type="button" class="btn-tracking-refresh" onclick="openOrderTrackingModal('${order.id}')" title="Atualizar dados agora">
+        <span>🔄 Atualizar</span>
+      </button>
+    </div>
+  `;
+}
+
+/**
+ * Verifica se existe pedido em andamento e atualiza a barra flutuante
+ */
+function checkActiveOrderBanner() {
+  const banner = document.getElementById("active-order-floating-banner");
+  if (!banner) return;
+
+  const lastOrderId = localStorage.getItem("elieudo_last_order_id");
+  if (!lastOrderId) {
+    banner.style.display = "none";
+    return;
+  }
+
+  const cleanId = lastOrderId.replace(/^#/, "").replace(/^ord_/, "").trim();
+
+  if (typeof fbGetOrderById === "function") {
+    fbGetOrderById(cleanId).then((ord) => {
+      if (!ord || ord.status === "finalizado") {
+        banner.style.display = "none";
+        return;
+      }
+
+      // Pedido ativo em andamento!
+      const iconEl = document.getElementById("floating-banner-icon");
+      const idEl = document.getElementById("floating-banner-order-id");
+      const descEl = document.getElementById("floating-banner-status-desc");
+
+      if (idEl) idEl.innerText = ord.id || ("#" + cleanId);
+
+      let icon = "📋";
+      let desc = "Recebido / Na fila";
+      if (ord.status === "preparando") {
+        icon = "🔥";
+        desc = "No Forno / Preparando";
+      } else if (ord.status === "entrega") {
+        icon = ord.deliveryType === "balcao" ? "🏪" : "🛵";
+        desc = ord.deliveryType === "balcao" ? "Pronto no Balcão!" : "Saiu para Entrega!";
+      }
+
+      if (iconEl) iconEl.innerText = icon;
+      if (descEl) descEl.innerText = desc;
+
+      banner.style.display = "block";
+    });
+  }
+}
+window.checkActiveOrderBanner = checkActiveOrderBanner;
