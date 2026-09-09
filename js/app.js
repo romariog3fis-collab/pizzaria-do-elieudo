@@ -43,6 +43,7 @@ document.addEventListener("DOMContentLoaded", () => {
   updateCartUI();
   updateStoreStatusUI();
   initOrderTracking();
+  initClientTableTracking();
 });
 
 // Sincronização em Tempo Real (Firebase & Fallback Local)
@@ -1610,3 +1611,215 @@ function checkActiveOrderBanner() {
   }
 }
 window.checkActiveOrderBanner = checkActiveOrderBanner;
+
+// ========================================================
+// FRENTE 2: COMANDA DIGITAL PRIVADA DA MESA (QR CODE CLIENTE)
+// ========================================================
+
+appState.activeClientTable = null;
+
+function initClientTableTracking() {
+  const urlParams = new URLSearchParams(window.location.search);
+  let mesaParam = urlParams.get("mesa");
+  let tokenParam = urlParams.get("token");
+
+  // Se vierem na URL, salva na sessão
+  if (mesaParam && tokenParam) {
+    try {
+      sessionStorage.setItem("elieudo_client_mesa", mesaParam.trim());
+      sessionStorage.setItem("elieudo_client_token", tokenParam.trim());
+    } catch (e) {}
+  } else {
+    // Se não veio na URL, tenta recuperar da sessão ativa nesta aba
+    try {
+      mesaParam = sessionStorage.getItem("elieudo_client_mesa");
+      tokenParam = sessionStorage.getItem("elieudo_client_token");
+    } catch (e) {}
+  }
+
+  if (!mesaParam || !tokenParam) return;
+
+  const cleanMesa = parseInt(mesaParam, 10);
+  if (isNaN(cleanMesa) || cleanMesa <= 0) return;
+
+  if (typeof fbListenSingleTableWithToken === "function") {
+    fbListenSingleTableWithToken(cleanMesa, tokenParam, onClientTableDataReceived);
+  }
+}
+
+function onClientTableDataReceived(res) {
+  const topBar = document.getElementById("table-client-top-bar");
+  const modal = document.getElementById("client-table-modal");
+
+  if (res && res.authorized && res.table && res.table.currentSession) {
+    appState.activeClientTable = res.table;
+
+    // Atualizar Barra Superior Fixa
+    if (topBar) {
+      const num = res.table.number;
+      const total = res.table.currentSession.total || res.table.currentSession.subtotal || 0;
+      
+      const numEl = document.getElementById("table-bar-num");
+      const subEl = document.getElementById("table-bar-parcial");
+      if (numEl) numEl.innerText = `🍽️ Mesa ${num < 10 ? '0' + num : num}`;
+      if (subEl) subEl.innerText = `Parcial: ${formatMoney(total)}`;
+
+      topBar.style.display = "flex";
+    }
+
+    // Se o modal estiver aberto, atualiza o conteúdo
+    if (modal && modal.classList.contains("active")) {
+      renderClientTableDetails();
+    }
+  } else {
+    // Acesso não autorizado, token inválido ou mesa encerrada
+    if (topBar) topBar.style.display = "none";
+    if (modal) modal.classList.remove("active");
+
+    if (res && res.error === "closed") {
+      try {
+        sessionStorage.removeItem("elieudo_client_mesa");
+        sessionStorage.removeItem("elieudo_client_token");
+      } catch (e) {}
+      alert("Sua conta foi encerrada com sucesso pelo atendimento. Agradecemos sua visita e bom apetite!");
+    } else if (res && res.error === "invalid_token") {
+      try {
+        sessionStorage.removeItem("elieudo_client_mesa");
+        sessionStorage.removeItem("elieudo_client_token");
+      } catch (e) {}
+      alert("Esta comanda não está mais ativa ou o QR Code expirou. Por favor, solicite um novo QR Code ao garçom.");
+    }
+  }
+}
+
+function openClientTableModal() {
+  if (!appState.activeClientTable) {
+    alert("Nenhuma mesa conectada no momento.");
+    return;
+  }
+  renderClientTableDetails();
+  const modal = document.getElementById("client-table-modal");
+  if (modal) modal.classList.add("active");
+}
+window.openClientTableModal = openClientTableModal;
+
+function closeClientTableModal() {
+  const modal = document.getElementById("client-table-modal");
+  if (modal) modal.classList.remove("active");
+}
+window.closeClientTableModal = closeClientTableModal;
+
+function renderClientTableDetails() {
+  const table = appState.activeClientTable;
+  if (!table || !table.currentSession) return;
+
+  const session = table.currentSession;
+  const num = table.number;
+
+  const titleEl = document.getElementById("client-modal-title");
+  const subEl = document.getElementById("client-modal-subtitle");
+  const totalEl = document.getElementById("client-bill-total");
+  const roundsContainer = document.getElementById("client-rounds-container");
+
+  if (titleEl) titleEl.innerText = `Mesa ${num < 10 ? '0' + num : num} • ${session.customerName || 'Cliente'}`;
+  if (subEl) subEl.innerText = `Aberta às ${session.openedTimeStr || '--:--'} • Atendida por ${session.waiterName || 'Salão'}`;
+  if (totalEl) totalEl.innerText = formatMoney(session.total || session.subtotal || 0);
+
+  // Avisos de Garçom ou Conta
+  const callMsg = document.getElementById("client-waiter-called-msg");
+  const billMsg = document.getElementById("client-bill-requested-msg");
+  if (callMsg) callMsg.style.display = table.callWaiter ? "block" : "none";
+  if (billMsg) billMsg.style.display = table.status === "aguardando_conta" ? "block" : "none";
+
+  if (!roundsContainer) return;
+  roundsContainer.innerHTML = "";
+
+  const rounds = session.rounds || [];
+  if (rounds.length === 0) {
+    roundsContainer.innerHTML = `
+      <div style="background: #11151e; border: 1px dashed var(--border-subtle); border-radius: 12px; padding: 20px; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
+        Seus pedidos foram abertos! O garçom está anotando os itens e eles aparecerão aqui em tempo real.
+      </div>
+    `;
+    return;
+  }
+
+  rounds.forEach(r => {
+    const card = document.createElement("div");
+    card.className = "client-round-card";
+
+    let statusText = "📋 Recebido na Cozinha";
+    if (r.status === "preparando") statusText = "🔥 No Forno a Lenha";
+    else if (r.status === "finalizado") statusText = "✅ Entregue na Mesa";
+
+    card.innerHTML = `
+      <div class="client-round-head">
+        <span>${r.roundNumber}ª Rodada (${r.timeStr})</span>
+        <span>${statusText}</span>
+      </div>
+      <div>
+        ${(r.items || []).map(it => `
+          <div class="client-item-row">
+            <div>
+              <div class="client-item-desc"><strong>${it.quantity}x</strong> ${it.flavorDescription || it.name}</div>
+              ${it.details ? `<div class="client-item-details">${it.details}</div>` : ''}
+            </div>
+            <div class="client-item-price">${formatMoney(it.totalPrice || (it.unitPrice * it.quantity))}</div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+
+    roundsContainer.appendChild(card);
+  });
+}
+
+async function clientCallWaiter() {
+  if (!appState.activeClientTable) return;
+  const num = appState.activeClientTable.number;
+
+  const btnTop = document.getElementById("btn-bar-call-waiter");
+  const btnModal = document.getElementById("btn-modal-call-waiter");
+  if (btnTop) btnTop.innerText = "⏳ Chamando...";
+  if (btnModal) btnModal.innerText = "⏳ Chamando...";
+
+  try {
+    if (typeof fbCallWaiter === "function") {
+      await fbCallWaiter(num, true);
+    }
+    const callMsg = document.getElementById("client-waiter-called-msg");
+    if (callMsg) callMsg.style.display = "block";
+    alert("🙋‍♂️ Garçom chamado com sucesso! Um atendente virá à sua mesa.");
+  } catch (e) {
+    console.error("Erro ao chamar garçom:", e);
+  } finally {
+    if (btnTop) btnTop.innerHTML = `<span>🙋‍♂️ Garçom</span>`;
+    if (btnModal) btnModal.innerHTML = `<span>🙋‍♂️ Chamar Garçom</span>`;
+  }
+}
+window.clientCallWaiter = clientCallWaiter;
+
+async function clientRequestBill() {
+  if (!appState.activeClientTable) return;
+  const num = appState.activeClientTable.number;
+
+  if (!confirm("Deseja solicitar a conta da sua mesa ao garçom?")) return;
+
+  const btnModal = document.getElementById("btn-modal-request-bill");
+  if (btnModal) btnModal.innerText = "⏳ Solicitando...";
+
+  try {
+    if (typeof fbRequestBill === "function") {
+      await fbRequestBill(num);
+    }
+    const billMsg = document.getElementById("client-bill-requested-msg");
+    if (billMsg) billMsg.style.display = "block";
+    alert("🧾 Conta solicitada! O garçom já foi avisado e trará a conferência/maquineta até a sua mesa.");
+  } catch (e) {
+    console.error("Erro ao solicitar conta:", e);
+  } finally {
+    if (btnModal) btnModal.innerHTML = `<span>🧾 Pedir a Conta</span>`;
+  }
+}
+window.clientRequestBill = clientRequestBill;
+

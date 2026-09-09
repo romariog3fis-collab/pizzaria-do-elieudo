@@ -1,0 +1,761 @@
+/* ==========================================
+   PDV & GESTÃO DE MESAS - PIZZARIA DO ELIEUDO
+   Estilo Dark Glassmorphic Mobile-First
+   ========================================== */
+
+:root {
+  --pdv-bg: #0b0d13;
+  --pdv-card: #151922;
+  --pdv-card-hover: #1c2230;
+  --pdv-border: rgba(255, 255, 255, 0.08);
+  --pdv-border-active: rgba(239, 68, 68, 0.4);
+
+  --primary-red: #c21a1a;
+  --primary-red-hover: #dc2626;
+  --gold-accent: #f59e0b;
+  --gold-glow: rgba(245, 158, 11, 0.25);
+  
+  --status-livre: #10b981;
+  --status-livre-bg: rgba(16, 185, 129, 0.12);
+  --status-ocupada: #ef4444;
+  --status-ocupada-bg: rgba(239, 68, 68, 0.14);
+  --status-alerta: #f59e0b;
+  --status-alerta-bg: rgba(245, 158, 11, 0.18);
+
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+  --font-heading: 'Outfit', sans-serif;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background-color: var(--pdv-bg);
+  color: var(--text-main);
+  font-family: var(--font-family);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+  padding-bottom: 30px;
+}
+
+/* Header Superior do Garçom / Salão */
+.pdv-header {
+  background: rgba(18, 22, 31, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--pdv-border);
+  padding: 12px 18px;
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pdv-brand-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pdv-logo-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #c21a1a, #7f1d1d);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  box-shadow: 0 4px 12px rgba(194, 26, 26, 0.35);
+}
+
+.pdv-brand-text h1 {
+  font-family: var(--font-heading);
+  font-size: 1.15rem;
+  font-weight: 800;
+  line-height: 1.1;
+  color: #fff;
+}
+
+.pdv-brand-text span {
+  font-size: 0.72rem;
+  color: var(--gold-accent);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.pdv-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.waiter-tag {
+  background: #1e2430;
+  border: 1px solid var(--pdv-border);
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.btn-header-round {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: #1e2430;
+  border: 1px solid var(--pdv-border);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-decoration: none;
+}
+
+.btn-header-round:hover {
+  background: #2a3243;
+}
+
+/* Barra de Status e Métricas Rápidas */
+.pdv-metrics-bar {
+  padding: 12px 18px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.metric-pill {
+  background: var(--pdv-card);
+  border: 1px solid var(--pdv-border);
+  border-radius: 12px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.metric-pill:hover, .metric-pill.active {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.metric-pill-val {
+  font-size: 1.35rem;
+  font-weight: 800;
+  font-family: var(--font-heading);
+}
+
+.metric-pill-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.pill-livres .metric-pill-val { color: var(--status-livre); }
+.pill-ocupadas .metric-pill-val { color: var(--status-ocupada); }
+.pill-alertas .metric-pill-val { color: var(--status-alerta); }
+
+/* Banner de Chamada de Garçom ou Conta Ativa */
+.pdv-alert-banner {
+  margin: 0 18px 12px;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(217, 119, 6, 0.3));
+  border: 1px solid rgba(245, 158, 11, 0.5);
+  border-radius: 12px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  animation: pulseAlert 1.5s infinite alternate;
+}
+
+@keyframes pulseAlert {
+  0% { box-shadow: 0 0 0 rgba(245, 158, 11, 0); }
+  100% { box-shadow: 0 0 16px rgba(245, 158, 11, 0.4); }
+}
+
+.pdv-alert-text {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #fef3c7;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Filtros de Visualização */
+.pdv-filters-bar {
+  padding: 0 18px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.filters-chips {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+}
+
+.chip-btn {
+  background: #181d27;
+  border: 1px solid var(--pdv-border);
+  color: var(--text-muted);
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.chip-btn.active {
+  background: #273042;
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+/* Grid de Mesas */
+.pdv-tables-container {
+  padding: 0 18px;
+  flex: 1;
+}
+
+.tables-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
+  gap: 12px;
+}
+
+@media (min-width: 600px) {
+  .tables-grid {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 16px;
+  }
+}
+
+.table-card {
+  background: var(--pdv-card);
+  border: 1px solid var(--pdv-border);
+  border-radius: 14px;
+  padding: 12px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 125px;
+  cursor: pointer;
+  position: relative;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  user-select: none;
+}
+
+.table-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.table-card:active {
+  transform: scale(0.97);
+}
+
+/* Estados de Mesa */
+.table-card.status-livre {
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+.table-card.status-livre .table-badge {
+  background: var(--status-livre-bg);
+  color: var(--status-livre);
+}
+
+.table-card.status-ocupada {
+  border-color: rgba(239, 68, 68, 0.45);
+  background: linear-gradient(180deg, rgba(239, 68, 68, 0.08), var(--pdv-card));
+}
+
+.table-card.status-ocupada .table-badge {
+  background: var(--status-ocupada-bg);
+  color: #f87171;
+}
+
+.table-card.status-aguardando_conta {
+  border-color: rgba(245, 158, 11, 0.6);
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.12), var(--pdv-card));
+  animation: pulseTable 1.4s infinite alternate;
+}
+
+.table-card.status-aguardando_conta .table-badge {
+  background: var(--status-alerta-bg);
+  color: var(--status-alerta);
+}
+
+.table-card.calling-waiter {
+  border-color: #f59e0b !important;
+  animation: shakeCalling 0.8s infinite;
+}
+
+@keyframes pulseTable {
+  0% { box-shadow: 0 0 0 rgba(245, 158, 11, 0); }
+  100% { box-shadow: 0 0 14px rgba(245, 158, 11, 0.4); }
+}
+
+@keyframes shakeCalling {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-3deg); }
+  75% { transform: rotate(3deg); }
+}
+
+.table-num {
+  font-family: var(--font-heading);
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1;
+}
+
+.table-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+  margin-top: 4px;
+}
+
+.table-details-box {
+  width: 100%;
+  text-align: center;
+  margin-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 6px;
+}
+
+.table-customer-name {
+  font-size: 0.72rem;
+  color: #cbd5e1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  display: block;
+}
+
+.table-total-val {
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: #10b981;
+  margin-top: 2px;
+}
+
+.table-timer {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+}
+
+.call-waiter-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: #f59e0b;
+  color: #000;
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+/* Modais do PDV */
+.pdv-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 100;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.25s ease;
+}
+
+@media (min-width: 640px) {
+  .pdv-modal-backdrop {
+    align-items: center;
+  }
+}
+
+.pdv-modal-backdrop.active {
+  opacity: 1;
+  visibility: visible;
+}
+
+.pdv-modal-sheet {
+  background: #161b24;
+  border: 1px solid var(--pdv-border);
+  border-top-left-radius: 20px;
+  border-top-right-radius: 20px;
+  width: 100%;
+  max-width: 580px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  transform: translateY(40px);
+  transition: transform 0.25s ease;
+  overflow: hidden;
+}
+
+@media (min-width: 640px) {
+  .pdv-modal-sheet {
+    border-radius: 20px;
+    transform: scale(0.95);
+  }
+}
+
+.pdv-modal-backdrop.active .pdv-modal-sheet {
+  transform: translateY(0) scale(1);
+}
+
+.pdv-modal-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--pdv-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(26, 32, 44, 0.5);
+}
+
+.pdv-modal-header h2 {
+  font-family: var(--font-heading);
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.btn-close-modal {
+  background: #242c3d;
+  border: none;
+  color: #fff;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+.pdv-modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.pdv-modal-footer {
+  padding: 14px 20px;
+  border-top: 1px solid var(--pdv-border);
+  background: rgba(22, 27, 36, 0.95);
+  display: flex;
+  gap: 10px;
+}
+
+/* Formulários do PDV */
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #cbd5e1;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+
+.form-input {
+  width: 100%;
+  background: #11141c;
+  border: 1px solid var(--pdv-border);
+  color: #fff;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.2s;
+}
+
+.form-input:focus {
+  border-color: #ef4444;
+}
+
+/* Botões do PDV */
+.btn-pdv-primary {
+  flex: 1;
+  background: linear-gradient(135deg, var(--primary-red), #991b1b);
+  border: none;
+  color: #fff;
+  padding: 14px 18px;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  font-weight: 800;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 4px 14px rgba(194, 26, 26, 0.4);
+  transition: all 0.2s;
+}
+
+.btn-pdv-primary:hover {
+  background: linear-gradient(135deg, var(--primary-red-hover), #b91c1c);
+}
+
+.btn-pdv-secondary {
+  background: #242c3d;
+  border: 1px solid var(--pdv-border);
+  color: #fff;
+  padding: 14px 18px;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.2s;
+}
+
+.btn-pdv-secondary:hover {
+  background: #313c52;
+}
+
+/* QR Code Box Dinâmico no PDV */
+.qr-code-display-card {
+  background: #0f131a;
+  border: 1px solid var(--pdv-border);
+  border-radius: 16px;
+  padding: 20px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.qr-code-frame {
+  background: #fff;
+  padding: 14px;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.qr-token-pill {
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px dashed rgba(245, 158, 11, 0.5);
+  color: var(--gold-accent);
+  padding: 4px 12px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+/* Lançador de Comanda / Itens */
+.category-nav-scroll {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  margin-bottom: 12px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.category-nav-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.cat-scroll-btn {
+  background: #19202c;
+  border: 1px solid var(--pdv-border);
+  color: var(--text-muted);
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex: none;
+}
+
+.cat-scroll-btn:hover {
+  background: #232c3d;
+  color: #fff;
+}
+
+.cat-scroll-btn.active {
+  background: #c21a1a;
+  color: #fff;
+  border-color: #ef4444;
+  box-shadow: 0 4px 12px rgba(194, 26, 26, 0.4);
+}
+
+.menu-items-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 42vh;
+  overflow-y: auto;
+}
+
+.menu-picker-row {
+  background: #19202c;
+  border: 1px solid var(--pdv-border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.menu-picker-row:hover {
+  background: #232c3d;
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.picker-item-title {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: #fff;
+}
+
+.picker-item-desc {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.picker-item-price {
+  font-weight: 800;
+  font-size: 0.95rem;
+  color: #10b981;
+}
+
+/* Carrinho Provisório da Rodada */
+.round-staging-box {
+  background: #0f131a;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 12px;
+  padding: 12px;
+  margin-top: 14px;
+}
+
+.round-staging-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--gold-accent);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.staging-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 0.82rem;
+}
+
+.staging-item-row:last-child {
+  border-bottom: none;
+}
+
+/* Extrato da Mesa */
+.rounds-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.round-timeline-card {
+  background: #11151e;
+  border: 1px solid var(--pdv-border);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.round-timeline-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--gold-accent);
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+}
+
+.round-item-line {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  font-size: 0.82rem;
+  margin-bottom: 4px;
+}
+
+.round-item-desc {
+  color: #e2e8f0;
+}
+
+.round-item-details {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}

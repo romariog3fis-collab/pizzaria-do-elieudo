@@ -625,3 +625,405 @@ function fbListenAdminPin(callback) {
   }
 }
 
+// ==========================================
+// MÓDULO DE MESAS & SALÃO (PDV EM TEMPO REAL)
+// ==========================================
+
+const DEFAULT_TABLES_COUNT = 15;
+const FB_TABLES_KEY = "elieudo_tables_db";
+
+function generateDefaultTables(count = DEFAULT_TABLES_COUNT) {
+  const tables = {};
+  for (let i = 1; i <= count; i++) {
+    const key = `mesa_${i < 10 ? '0' + i : i}`;
+    tables[key] = {
+      number: i,
+      name: `Mesa ${i < 10 ? '0' + i : i}`,
+      status: "livre", // "livre" | "ocupada" | "aguardando_conta"
+      callWaiter: false,
+      callWaiterTime: null,
+      requestBillTime: null,
+      currentSession: null
+    };
+  }
+  return tables;
+}
+
+function generateSecureSessionToken(length = 6) {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let token = "";
+  for (let i = 0; i < length; i++) {
+    token += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return token;
+}
+
+function getLocalTables() {
+  try {
+    const saved = localStorage.getItem(FB_TABLES_KEY);
+    if (saved) {
+      return JSON.parse(saved);
+    }
+  } catch (e) {
+    console.error("Erro ao ler mesas locais:", e);
+  }
+  const def = generateDefaultTables();
+  try {
+    localStorage.setItem(FB_TABLES_KEY, JSON.stringify(def));
+  } catch (e) {}
+  return def;
+}
+
+function saveLocalTables(tablesObj) {
+  try {
+    localStorage.setItem(FB_TABLES_KEY, JSON.stringify(tablesObj));
+    if (window.BroadcastChannel) {
+      const channel = new BroadcastChannel("elieudo_orders_bus");
+      channel.postMessage({ type: "TABLES_UPDATED", tables: tablesObj });
+      channel.close();
+    }
+  } catch (e) {
+    console.error("Erro ao salvar mesas locais:", e);
+  }
+}
+
+/**
+ * Escuta em tempo real todas as mesas do salão (Para o PDV do Garçom e Painel Admin)
+ */
+function fbListenTables(callback) {
+  const local = getLocalTables();
+  if (typeof callback === "function") callback(local);
+
+  if (isFirebaseReady && fbDb) {
+    fbDb.ref("tables").on("value", (snapshot) => {
+      const val = snapshot.val();
+      if (val && typeof val === "object") {
+        saveLocalTables(val);
+        if (typeof callback === "function") callback(val);
+      } else if (val === null) {
+        // Inicializa nó tables no Firebase com o padrão
+        const def = getLocalTables();
+        fbDb.ref("tables").set(def);
+      }
+    });
+  }
+
+  // Ouvinte de sincronização entre abas
+  if (window.BroadcastChannel) {
+    try {
+      const bc = new BroadcastChannel("elieudo_orders_bus");
+      bc.onmessage = (event) => {
+        if (event.data && event.data.type === "TABLES_UPDATED" && typeof callback === "function") {
+          callback(event.data.tables);
+        }
+      };
+    } catch (e) {}
+  }
+}
+
+/**
+ * Escuta em tempo real uma mesa específica validando o token do cliente (Comanda Privada do Cliente)
+ */
+function fbListenSingleTableWithToken(tableNum, token, callback) {
+  const formattedKey = typeof tableNum === "number" 
+    ? `mesa_${tableNum < 10 ? '0' + tableNum : tableNum}`
+    : (tableNum.startsWith("mesa_") ? tableNum : `mesa_${parseInt(tableNum) < 10 ? '0' + parseInt(tableNum) : tableNum}`);
+
+  const checkAndDeliver = (tables) => {
+    if (!tables || !tables[formattedKey]) {
+      if (typeof callback === "function") callback({ authorized: false, error: "not_found" });
+      return;
+    }
+    const table = tables[formattedKey];
+    if (table.status === "livre" || !table.currentSession) {
+      if (typeof callback === "function") callback({ authorized: false, error: "closed", table });
+      return;
+    }
+    // Validação estrita do token privado
+    if (String(table.currentSession.token).toUpperCase() === String(token).toUpperCase()) {
+      if (typeof callback === "function") callback({ authorized: true, table });
+    } else {
+      if (typeof callback === "function") callback({ authorized: false, error: "invalid_token" });
+    }
+  };
+
+  // Verificação inicial local
+  checkAndDeliver(getLocalTables());
+
+  // Ouvinte contínuo no Firebase
+  if (isFirebaseReady && fbDb) {
+    fbDb.ref(`tables/${formattedKey}`).on("value", (snapshot) => {
+      const val = snapshot.val();
+      if (val) {
+        const fullLocal = getLocalTables();
+        fullLocal[formattedKey] = val;
+        saveLocalTables(fullLocal);
+        checkAndDeliver({ [formattedKey]: val });
+      } else {
+        checkAndDeliver({});
+      }
+    });
+  }
+}
+
+/**
+ * Abertura de Mesa com Geração de Sessão e Token Privado
+ */
+async function fbOpenTable(tableNum, { customerName = "", waiterName = "Salão", numPeople = 1 }) {
+  const formattedKey = typeof tableNum === "number" 
+    ? `mesa_${tableNum < 10 ? '0' + tableNum : tableNum}`
+    : (tableNum.startsWith("mesa_") ? tableNum : `mesa_${parseInt(tableNum) < 10 ? '0' + parseInt(tableNum) : tableNum}`);
+
+  const numInt = parseInt(formattedKey.replace("mesa_", ""), 10);
+  const token = generateSecureSessionToken();
+  const sessionId = `ses_${Date.now().toString(36)}_${token.toLowerCase()}`;
+  const now = new Date();
+
+  const sessionData = {
+    sessionId: sessionId,
+    token: token,
+    openedAt: Date.now(),
+    openedDateStr: now.toLocaleDateString('pt-BR'),
+    openedTimeStr: now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+    customerName: customerName.trim() || `Cliente Mesa ${numInt < 10 ? '0' + numInt : numInt}`,
+    waiterName: waiterName.trim() || "Salão",
+    numPeople: parseInt(numPeople, 10) || 1,
+    rounds: [],
+    subtotal: 0,
+    discountAmount: 0,
+    total: 0
+  };
+
+  const tables = getLocalTables();
+  if (!tables[formattedKey]) {
+    tables[formattedKey] = {
+      number: numInt,
+      name: `Mesa ${numInt < 10 ? '0' + numInt : numInt}`
+    };
+  }
+
+  tables[formattedKey].status = "ocupada";
+  tables[formattedKey].callWaiter = false;
+  tables[formattedKey].callWaiterTime = null;
+  tables[formattedKey].requestBillTime = null;
+  tables[formattedKey].currentSession = sessionData;
+
+  saveLocalTables(tables);
+
+  if (isFirebaseReady && fbDb) {
+    try {
+      await fbDb.ref(`tables/${formattedKey}`).set(tables[formattedKey]);
+    } catch (e) {
+      console.error("Erro ao salvar abertura no Firebase:", e);
+    }
+  }
+
+  return { success: true, table: tables[formattedKey], token: token };
+}
+
+/**
+ * Lançar uma nova Rodada de Pedidos na Mesa (Envia para o KDS e atualiza a Mesa)
+ */
+async function fbAddRoundToTable(tableNum, items, waiterName = "") {
+  const formattedKey = typeof tableNum === "number" 
+    ? `mesa_${tableNum < 10 ? '0' + tableNum : tableNum}`
+    : (tableNum.startsWith("mesa_") ? tableNum : `mesa_${parseInt(tableNum) < 10 ? '0' + parseInt(tableNum) : tableNum}`);
+
+  const tables = getLocalTables();
+  const table = tables[formattedKey];
+  if (!table || table.status === "livre" || !table.currentSession) {
+    throw new Error("Mesa não está aberta para lançamentos.");
+  }
+
+  const session = table.currentSession;
+  if (!session.rounds) session.rounds = [];
+
+  const roundNumber = session.rounds.length + 1;
+  const numInt = table.number || parseInt(formattedKey.replace("mesa_", ""), 10);
+  const roundOrderId = `#M${numInt < 10 ? '0' + numInt : numInt}-${roundNumber < 10 ? '0' + roundNumber : roundNumber}`;
+  const now = new Date();
+
+  let roundSubtotal = 0;
+  items.forEach(item => {
+    roundSubtotal += (parseFloat(item.totalPrice) || (parseFloat(item.unitPrice || item.price || 0) * (item.quantity || 1)));
+  });
+
+  const roundRecord = {
+    roundNumber: roundNumber,
+    orderId: roundOrderId,
+    timestamp: Date.now(),
+    dateStr: now.toLocaleDateString('pt-BR'),
+    timeStr: now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+    status: "pendente", // "pendente" | "preparando" | "finalizado"
+    items: JSON.parse(JSON.stringify(items)),
+    subtotal: roundSubtotal
+  };
+
+  session.rounds.push(roundRecord);
+
+  // Recalcular totais da mesa
+  session.subtotal = session.rounds.reduce((sum, r) => sum + (r.subtotal || 0), 0);
+  session.total = Math.max(0, session.subtotal - (session.discountAmount || 0));
+
+  saveLocalTables(tables);
+
+  // 1. Atualizar mesa no Firebase
+  if (isFirebaseReady && fbDb) {
+    try {
+      await fbDb.ref(`tables/${formattedKey}`).set(table);
+    } catch (e) {
+      console.error("Erro ao atualizar mesa no Firebase:", e);
+    }
+  }
+
+  // 2. Criar comanda individual no nó /orders para cair diretamente no KDS
+  const kdsOrder = {
+    id: roundOrderId,
+    timestamp: Date.now(),
+    dateStr: roundRecord.dateStr,
+    timeStr: roundRecord.timeStr,
+    customer: {
+      name: `Mesa ${numInt < 10 ? '0' + numInt : numInt} (${session.customerName})`,
+      phone: "",
+      address: `Salão - Mesa ${numInt < 10 ? '0' + numInt : numInt}`,
+      reference: `Garçom: ${waiterName || session.waiterName || 'Salão'} • Rodada ${roundNumber}`
+    },
+    deliveryType: "mesa",
+    tableNumber: numInt,
+    tableKey: formattedKey,
+    roundNumber: roundNumber,
+    sessionToken: session.token,
+    paymentMethod: "A Pagar no Fechamento",
+    items: JSON.parse(JSON.stringify(items)),
+    subtotal: roundSubtotal,
+    discountAmount: 0,
+    totalPrice: roundSubtotal,
+    status: "pendente"
+  };
+
+  try {
+    await fbSaveOrder(kdsOrder);
+  } catch (err) {
+    console.error("Erro ao despachar pedido para o KDS:", err);
+  }
+
+  return { success: true, round: roundRecord, table: table };
+}
+
+/**
+ * Cliente solicita atendimento do garçom na mesa
+ */
+async function fbCallWaiter(tableNum, callStatus = true) {
+  const formattedKey = typeof tableNum === "number" 
+    ? `mesa_${tableNum < 10 ? '0' + tableNum : tableNum}`
+    : (tableNum.startsWith("mesa_") ? tableNum : `mesa_${parseInt(tableNum) < 10 ? '0' + parseInt(tableNum) : tableNum}`);
+
+  const tables = getLocalTables();
+  if (tables[formattedKey]) {
+    tables[formattedKey].callWaiter = !!callStatus;
+    tables[formattedKey].callWaiterTime = callStatus ? Date.now() : null;
+    saveLocalTables(tables);
+
+    if (isFirebaseReady && fbDb) {
+      try {
+        await fbDb.ref(`tables/${formattedKey}/callWaiter`).set(!!callStatus);
+        await fbDb.ref(`tables/${formattedKey}/callWaiterTime`).set(callStatus ? Date.now() : null);
+      } catch (e) {}
+    }
+  }
+  return true;
+}
+
+/**
+ * Cliente solicita a conta da mesa
+ */
+async function fbRequestBill(tableNum) {
+  const formattedKey = typeof tableNum === "number" 
+    ? `mesa_${tableNum < 10 ? '0' + tableNum : tableNum}`
+    : (tableNum.startsWith("mesa_") ? tableNum : `mesa_${parseInt(tableNum) < 10 ? '0' + parseInt(tableNum) : tableNum}`);
+
+  const tables = getLocalTables();
+  if (tables[formattedKey] && tables[formattedKey].status === "ocupada") {
+    tables[formattedKey].status = "aguardando_conta";
+    tables[formattedKey].requestBillTime = Date.now();
+    saveLocalTables(tables);
+
+    if (isFirebaseReady && fbDb) {
+      try {
+        await fbDb.ref(`tables/${formattedKey}/status`).set("aguardando_conta");
+        await fbDb.ref(`tables/${formattedKey}/requestBillTime`).set(Date.now());
+      } catch (e) {}
+    }
+  }
+  return true;
+}
+
+/**
+ * Fechamento e Pagamento da Mesa:
+ * Registra o histórico consolidado e libera a mesa imediatamente, destruindo o token de sessão
+ */
+async function fbCloseTable(tableNum, { paymentMethod = "Dinheiro", discount = 0, serviceTax = 0, notes = "" }) {
+  const formattedKey = typeof tableNum === "number" 
+    ? `mesa_${tableNum < 10 ? '0' + tableNum : tableNum}`
+    : (tableNum.startsWith("mesa_") ? tableNum : `mesa_${parseInt(tableNum) < 10 ? '0' + parseInt(tableNum) : tableNum}`);
+
+  const tables = getLocalTables();
+  const table = tables[formattedKey];
+  if (!table || !table.currentSession) {
+    return false;
+  }
+
+  const session = table.currentSession;
+  const numInt = table.number || parseInt(formattedKey.replace("mesa_", ""), 10);
+  const now = new Date();
+
+  const finalOrderRecord = {
+    id: `#CONTA-M${numInt < 10 ? '0' + numInt : numInt}-${Date.now().toString().slice(-4)}`,
+    timestamp: Date.now(),
+    dateStr: now.toLocaleDateString('pt-BR'),
+    timeStr: now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+    customer: {
+      name: `Mesa ${numInt < 10 ? '0' + numInt : numInt} - ${session.customerName}`,
+      phone: "",
+      address: "Atendimento no Salão",
+      reference: `Garçom: ${session.waiterName || 'Salão'} | Pessoas: ${session.numPeople || 1}`
+    },
+    deliveryType: "mesa",
+    tableNumber: numInt,
+    paymentMethod: paymentMethod,
+    items: session.rounds.reduce((acc, r) => acc.concat(r.items || []), []),
+    subtotal: session.subtotal || 0,
+    discountAmount: parseFloat(discount) || 0,
+    serviceTax: parseFloat(serviceTax) || 0,
+    totalPrice: Math.max(0, (session.subtotal || 0) - (parseFloat(discount) || 0) + (parseFloat(serviceTax) || 0)),
+    notes: notes,
+    status: "finalizado"
+  };
+
+  // Salva no banco de pedidos finalizados
+  try {
+    await fbSaveOrder(finalOrderRecord);
+  } catch (e) {
+    console.error("Erro ao salvar fechamento no histórico:", e);
+  }
+
+  // Libera a mesa e destrói o token da sessão
+  table.status = "livre";
+  table.callWaiter = false;
+  table.callWaiterTime = null;
+  table.requestBillTime = null;
+  table.currentSession = null;
+
+  saveLocalTables(tables);
+
+  if (isFirebaseReady && fbDb) {
+    try {
+      await fbDb.ref(`tables/${formattedKey}`).set(table);
+    } catch (e) {
+      console.error("Erro ao liberar mesa no Firebase:", e);
+    }
+  }
+
+  return { success: true, finalRecord: finalOrderRecord };
+}
+

@@ -1815,3 +1815,201 @@ body {
 .btn-tracking-refresh:hover {
   background: rgba(255, 255, 255, 0.12);
 }
+
+/* ========================================================
+   FRENTE 2: COMANDA DIGITAL & MESA DO CLIENTE (QR CODE)
+   ======================================================== */
+
+.table-client-top-bar {
+  position: sticky;
+  top: 0;
+  z-index: 55;
+  background: linear-gradient(135deg, rgba(26, 32, 44, 0.95), rgba(15, 23, 42, 0.98));
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 2px solid var(--amber);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  animation: slideDownBar 0.3s ease-out;
+}
+
+@keyframes slideDownBar {
+  from { transform: translateY(-100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.table-client-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.table-client-badge {
+  font-family: var(--font-heading);
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.table-client-sub {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #10b981;
+}
+
+.table-client-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-table-call-waiter {
+  background: rgba(245, 158, 11, 0.18);
+  border: 1px solid var(--amber);
+  color: #fef3c7;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s;
+}
+
+.btn-table-call-waiter:active {
+  transform: scale(0.95);
+  background: var(--amber);
+  color: #000;
+}
+
+.btn-table-view-bill {
+  background: linear-gradient(135deg, var(--primary), #991b1b);
+  border: none;
+  color: #fff;
+  padding: 7px 14px;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  box-shadow: 0 2px 10px rgba(194, 26, 26, 0.4);
+  transition: all 0.2s;
+}
+
+.btn-table-view-bill:active {
+  transform: scale(0.95);
+}
+
+/* Modal de Comanda do Cliente */
+.table-modal-content {
+  max-width: 520px;
+}
+
+.client-rounds-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 45vh;
+  overflow-y: auto;
+  margin-bottom: 14px;
+}
+
+.client-round-card {
+  background: #191d26;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.client-round-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+  padding-bottom: 6px;
+  margin-bottom: 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--amber);
+}
+
+.client-item-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 6px;
+  font-size: 0.82rem;
+}
+
+.client-item-desc {
+  color: #f1f5f9;
+}
+
+.client-item-details {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.client-item-price {
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
+.client-bill-card {
+  background: #0f131a;
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  padding: 14px 16px;
+}
+
+.btn-client-call {
+  background: #242c3d;
+  border: 1px solid var(--amber);
+  color: var(--amber-light);
+  padding: 12px 14px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.2s;
+}
+
+.btn-client-call:active {
+  background: var(--amber);
+  color: #000;
+}
+
+.btn-client-bill {
+  background: linear-gradient(135deg, #059669, #047857);
+  border: none;
+  color: #fff;
+  padding: 12px 14px;
+  border-radius: 12px;
+  font-weight: 800;
+  font-size: 0.85rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-shadow: 0 4px 12px rgba(5, 150, 105, 0.35);
+  transition: all 0.2s;
+}
+
+.btn-client-bill:active {
+  transform: scale(0.97);
+}
+

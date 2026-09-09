@@ -407,3 +407,10 @@ const MENU_DATA = {
     { id: "beb_sao_geraldo_lata", category: "bebidas", name: "São Geraldo Caju Lata 350ml", description: "Tradição em lata 350ml.", price: 6.00, badge: "Sucesso" }
   ]
 };
+
+if (typeof window !== "undefined") {
+  window.MENU_DATA = MENU_DATA;
+}
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = MENU_DATA;
+}

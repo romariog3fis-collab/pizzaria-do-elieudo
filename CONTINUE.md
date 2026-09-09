@@ -9,8 +9,9 @@ Este documento registra com total precisão o estado atual, a arquitetura, as cr
 | Recurso | URL | Observações |
 | :--- | :--- | :--- |
 | **Cardápio Digital (Cliente)** | [https://romariog3fis-collab.github.io/pizzaria-do-elieudo/](https://romariog3fis-collab.github.io/pizzaria-do-elieudo/) | Responsivo, otimizado para celular e desktop. |
-| **Rastreamento de Exemplo** | [https://romariog3fis-collab.github.io/pizzaria-do-elieudo/?pedido=2355](https://romariog3fis-collab.github.io/pizzaria-do-elieudo/?pedido=2355) | Exemplo de link com pedido real no Firebase. |
-| **Painel Admin & KDS** | [https://romariog3fis-collab.github.io/pizzaria-do-elieudo/admin.html](https://romariog3fis-collab.github.io/pizzaria-do-elieudo/admin.html) | Tela de Cozinha, Relatórios, Cupons e Cardápio. |
+| **Comanda da Mesa (Exemplo)** | [https://romariog3fis-collab.github.io/pizzaria-do-elieudo/?mesa=2&token=EXEMPLO](https://romariog3fis-collab.github.io/pizzaria-do-elieudo/?mesa=2&token=EXEMPLO) | Acesso seguro e privado do cliente com token da sessão. |
+| **PDV Mobile Salão & Garçom** | [https://romariog3fis-collab.github.io/pizzaria-do-elieudo/pdv.html](https://romariog3fis-collab.github.io/pizzaria-do-elieudo/pdv.html) | Tela mobile de abertura de mesa, QR Code e rodadas. |
+| **Painel Admin, KDS & Salão** | [https://romariog3fis-collab.github.io/pizzaria-do-elieudo/admin.html](https://romariog3fis-collab.github.io/pizzaria-do-elieudo/admin.html) | Cozinha KDS, Mesas, Relatórios, Cupons e Estoque. |
 | **PIN Padrão de Acesso Admin** | **`1234`** | Alterável pelo modal "Alterar PIN" no próprio painel. |
 | **Console Firebase** | [https://console.firebase.google.com/project/pizzaria-do-elieudo/database](https://console.firebase.google.com/project/pizzaria-do-elieudo/database) | Projeto: `pizzaria-do-elieudo` |
 | **Firebase Realtime Database** | `https://pizzaria-do-elieudo-default-rtdb.firebaseio.com/` | Banco em nuvem ativo e sincronizado. |
@@ -30,60 +31,56 @@ Este documento registra com total precisão o estado atual, a arquitetura, as cr
   1. O cliente preenche os dados (Nome, Telefone, Entrega/Retirada, Pagamento, Troco).
   2. Clica no botão **`✅ Confirmar & Enviar Pedido`**: o pedido é **imediatamente salvo no Firebase Realtime Database** (`/orders/ord_XXXX`) e no `localStorage`.
   3. Salva o ID do pedido no `localStorage` (`elieudo_last_order_id`) para rastreamento persistente no dispositivo.
-  4. Abre o modal comemorativo de confirmação com ID (`#XXXX`), resumo e botões:
-     - **`📲 Enviar Pedido para o WhatsApp`**: dispara o WhatsApp com a mensagem formatada contendo o link direto de rastreamento.
-     - **`🛵 Acompanhar Pedido em Tempo Real`**: abre diretamente o modal de acompanhamento ao vivo.
+  4. Abre o modal comemorativo de confirmação com ID (`#XXXX`), resumo e botões de WhatsApp e Acompanhamento.
 
 ### ✅ Frente 2: Sistema de Acompanhamento de Pedido em Tempo Real (Order Tracking)
 - **Stepper Visual Dinâmico (4 Etapas):**
   1. 📋 **Pedido Recebido:** Confirmado no sistema, aguardando início do preparo.
   2. 🔥 **No Forno / Cozinha:** Pizzaiolo montando e assando no forno a lenha (com pulso visual âmbar).
-  3. 🛵 / 🏪 **A Caminho / Balcão:**
+  3. 🛵 / 🏪 / 🍽️ **A Caminho / Balcão / Mesa:**
      - Se Delivery: *"🛵 Saiu para Entrega! O motoboy está em rota para seu endereço."*
      - Se Balcão: *"🏪 Pronto para Retirada no Balcão da Pizzaria!"*
+     - Se Mesa: *"🍽️ Sendo servido na sua mesa!"*
   4. 🎉 **Entregue / Concluído:** Pedido finalizado com sucesso e mensagem de agradecimento.
-- **Sincronização ao Vivo (Zero Reload):**
-  - Ouvinte dinâmico `fbListenSingleOrder` no Firebase Realtime Database (`orders/ord_XXXX`).
-  - Flag `hasDeliveredData` para blindar o ouvinte contra race conditions e timeouts de rede, prevenindo falsas telas de "pedido não encontrado".
-  - Atualização instantânea na tela do cliente assim que o administrador avança a fase no KDS.
-  - Suporte a busca manual com clique ou pressionando a tecla **Enter** no campo `#track-order-input`.
-- **Múltiplos Pontos de Acesso do Cliente:**
-  - **Link Direto (URL Param):** `/?pedido=2355` (carrega e abre o rastreamento automaticamente).
-  - **Botão Fixo no Topo:** Botão **`🛵 Acompanhar Pedido`** no cabeçalho do cardápio digital.
-  - **Barra Flutuante de Pedido Ativo:** Exibida no topo quando o cliente possui um pedido em andamento no dispositivo, com ícone animado e status atualizado.
-  - **Botão de Ajuda Direta:** Atalho para chamar a pizzaria no WhatsApp já com mensagem preenchida com o ID do pedido.
 
-### ✅ Frente 3: Painel Administrativo com Bloqueio por PIN & KDS
-- **Lockscreen Dark Glassmorphic:** Teclado numérico touch com suporte a clique e digitação física no teclado.
-- **Autenticação em Sessão:** Guarda estado autenticado via `sessionStorage`.
-- **Botão de Logout e Alteração de PIN:** Permite redefinir a senha numérica (com confirmação da senha atual) e sincroniza a nova senha na nuvem e localmente.
-- **Kanban KDS Operacional (4 Colunas):**
-  - Colunas: *1. Pendentes*, *2. No Forno / Cozinha*, *3. Saiu p/ Entrega*, *4. Finalizados*.
-  - Ações em cada card: **`🖨️ Forno`** (comanda de cozinha sem preços), **`🧾 Cliente`** (recibo completo), avançar fase e **`📲 Avisar`** (dispara mensagem no WhatsApp do cliente com o link de rastreamento).
+### ✅ Frente 3: PDV Mobile Salão & Garçom (`pdv.html`)
+- **Interface Mobile-First para Garçons:** Otimizada para uso em smartphones com uma mão.
+- **Mapa Tátil de 15 Mesas:**
+  - 🟢 **Verde (Livre):** Toque para abrir informando nome do cliente e número de pessoas.
+  - 🔴 **Vermelho (Ocupada):** Exibe valor parcial da conta e tempo aberta.
+  - 🟡 **Amarelo Pulsante (Chamando):** Alerta visual e sonoro quando o cliente pede garçom ou conta.
+- **Abertura Segura de Mesa com QR Code Dinâmico:**
+  - Gera na hora uma sessão exclusiva com **Token Secreto Temporário** (ex: `?mesa=2&token=RDVQCZ`).
+  - Exibe o QR Code dinâmico na tela para o cliente escanear na hora com a câmera.
+- **Lançador Ágil de Pedidos e Rodadas:**
+  - Seletor rápido de categorias: Pizzas Tradicionais, Premium, Doces, Bebidas & Sucos.
+  - Montador de Pizza Meio a Meio com cálculo automático pelo maior valor e bordas recheadas.
+  - Botão **`🔥 Enviar Pedido p/ Cozinha`**: Salva na mesa e aciona o KDS da cozinha imediatamente.
+- **Conferência e Fechamento:**
+  - Extrato detalhado por rodada.
+  - Impressão térmica de Pré-Conta de 80mm/58mm.
+  - Fechamento com registro de forma de pagamento (PIX, Dinheiro, Cartão, Divisão por pessoa) e liberação imediata da mesa.
 
-### ✅ Frente 4: Sincronização em Tempo Real (Cross-Device & Cross-Tab)
-- **Mecanismo Híbrido Triplo:**
-  1. **Firebase Realtime Database:** Ouve os nós `/orders`, `/coupons` e `/admin_pin`.
-  2. **BroadcastChannel (`elieudo_orders_bus`):** Sincroniza abas abertas no mesmo navegador em 0 milissegundos.
-  3. **Storage Event Listener (`window.addEventListener('storage', ...)`):** Redundância local garantida.
-- **Alerta Sonoro:** Notificação por Web Audio API sintetizado a cada novo pedido pendente.
+### ✅ Frente 4: Comanda Digital Privada do Cliente via QR Code (`index.html?mesa=X&token=Y`)
+- **Blindagem de Privacidade:** Apenas o cliente com o token correto daquela sessão acessa a mesa. Ninguém de outra mesa consegue visualizar consumo alheio.
+- **Barra Superior Fixa:** Surge no topo: **`🍽️ Mesa XX • Parcial: R$ XX,XX [Ver Comanda]`**.
+- **Modal "Minha Comanda ao Vivo":**
+  - Lista de itens por rodada com status da cozinha (`🔥 No Forno a Lenha`, `✅ Entregue na Mesa`).
+  - Total parcial atualizado em tempo real sem recarregar a página.
+  - Botão **`🙋‍♂️ Chamar Garçom`**: Dispara alerta sonoro e visual no PDV do garçom.
+  - Botão **`🧾 Pedir a Conta`**: Avisa o garçom para levar a maquininha até a mesa.
+- **Encerramento Automático:** Ao fechar a mesa no caixa, a sessão expira e o cliente recebe mensagem de agradecimento.
 
-### ✅ Frente 5: Motor de Cupons & Promoções (Admin)
-- Aba dedicada no painel (`#tab-coupons`):
-  - Formulário para criar cupom: Código (ex: `PIZZA10`), Tipo (% ou R$), Valor, Pedido Mínimo.
-  - Tabela com status (Ativo / Pausado) e botão de Excluir.
-  - Sincronizado automaticamente com o Firebase.
+### ✅ Frente 5: Painel Administrativo, KDS & Gestão de Mesas (`admin.html`)
+- **Aba "🍽️ Salão & Mesas (PDV)":**
+  - Monitoramento de todas as 15 mesas com faturamento do salão no dia.
+  - Botão **`🖨️ Imprimir Placas/QRs`**: Imprime cartões de QR Code para todas as mesas.
+- **KDS Inteligente:** Identifica comandas de Delivery (`🛵`), Balcão (`🏪`) e Mesas (`🍽️ Mesa XX • Rodada Y`).
+- **Comanda Térmica do Forno:** Destaca em tamanho grande o número da mesa e dados do garçom.
 
-### ✅ Frente 6: Relatórios Financeiros & Fechamento de Caixa
-- Aba dedicada no painel (`#tab-reports`):
-  - **Filtros rápidos:** Hoje, Ontem, Últimos 7 Dias, Este Mês, Todo o Histórico.
-  - **Cards de Métricas:** Faturamento Bruto, Ticket Médio, Total de Descontos e Total em Taxas de Entrega.
-  - **Gráficos e Barras de Pagamento:** Distribuição percentual e em valor entre PIX, Cartão e Dinheiro.
-  - **Modalidade:** Comparativo Balcão x Entrega.
-  - **Top 5 Mais Vendidos:** Ranking de pizzas e bebidas mais pedidas no período.
-  - **Fechamento de Caixa:**
-    - Botão **`🖨️ Imprimir Fechamento`** com folha de estilo térmica (`@media print`) limpa e legível.
-    - Botão **`📲 Copiar Resumo para WhatsApp`** para colar diretamente no grupo dos sócios/gerência.
+### ✅ Frente 6: Relatórios Financeiros & Fechamento de Caixa com Salão
+- **Métricas por Canal:** Faturamento separado por **Delivery**, **Balcão** e **Salão / Mesas**.
+- **Fechamento Térmico & WhatsApp:** Relatório impresso e mensagem formatada para WhatsApp contendo a divisão exata entre entrega, balcão e mesas.
 
 ---
 

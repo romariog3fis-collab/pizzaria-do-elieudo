@@ -12,6 +12,7 @@
   
   <!-- CSS Stylesheets -->
   <link rel="stylesheet" href="css/admin.css" />
+  <link rel="stylesheet" href="css/pdv.css" />
 </head>
 <body>
 
@@ -87,6 +88,9 @@
       </button>
 
       <button class="btn-admin btn-sound-toggle active" id="btn-toggle-sound">🔔 Som Ligado</button>
+      <a href="pdv.html" target="_blank" class="btn-admin" style="background: #059669; border-color: #10b981;" title="Abrir PDV Mobile para Garçons e Salão">
+        <span>🧑‍🍳 PDV Garçom</span>
+      </a>
       <button class="btn-admin" id="btn-simulate-order" title="Gerar pedido de teste">➕ Simular Pedido</button>
       <button class="btn-admin" id="btn-clear-orders" style="color: #ef4444;" title="Limpar lista">🗑️ Limpar</button>
       <a href="index.html" target="_blank" class="btn-admin" style="background: #c21a1a; border-color: #e53935;">
@@ -105,6 +109,10 @@
       <button class="admin-tab-btn active" id="tab-btn-kds">
         <span>📋 Pedidos & KDS Cozinha</span>
         <span class="tab-badge-pill" id="badge-orders-count">0</span>
+      </button>
+      <button class="admin-tab-btn" id="tab-btn-tables">
+        <span>🍽️ Salão & Mesas (PDV)</span>
+        <span class="tab-badge-pill" id="badge-tables-occupied-count" style="background: rgba(239, 68, 68, 0.2); color: #f87171;">0 ocupadas</span>
       </button>
       <button class="admin-tab-btn" id="tab-btn-stock">
         <span>🍕 Disponibilidade & Esgotamento</span>
@@ -358,6 +366,57 @@
     </div>
   </div>
 
+  <!-- VIEW 5: GESTÃO DO SALÃO DE MESAS & PDV -->
+  <div id="view-tables" style="display: none;">
+    <div class="stock-panel-wrapper">
+      
+      <!-- Cabeçalho do Salão -->
+      <div class="stock-header-card">
+        <div class="stock-title-block">
+          <h2>🍽️ Gestão do Salão de Mesas & Atendimento</h2>
+          <p>Acompanhe o status em tempo real de todas as mesas, chamadas de garçom, pedidos de conta e faturamento de salão.</p>
+        </div>
+        <div class="stock-actions-bar">
+          <a href="pdv.html" target="_blank" class="btn-admin" style="background: #059669; border-color: #10b981; color: #fff;" title="Abrir interface mobile para o garçom usar no celular">
+            <span>📱 Abrir PDV Garçom</span>
+          </a>
+          <button class="btn-admin" onclick="printAllTablesQRCodes()" title="Imprimir cartões de QR Code para colocar nas mesas">
+            <span>🖨️ Imprimir Placas/QRs</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Métricas do Salão -->
+      <section class="metrics-grid" style="margin-bottom: 16px;">
+        <div class="metric-card">
+          <span class="metric-label">Faturamento Salão Hoje</span>
+          <span class="metric-val text-green" id="admin-saloon-revenue">R$ 0,00</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-label">Mesas Ocupadas</span>
+          <span class="metric-val" style="color: #ef4444;" id="admin-saloon-occupied">0 / 15</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-label">Chamando Garçom / Conta</span>
+          <span class="metric-val" style="color: #f59e0b;" id="admin-saloon-alerts">0</span>
+        </div>
+      </section>
+
+      <!-- Banner de Notificação de Chamados -->
+      <div id="admin-tables-alert-banner" class="pdv-alert-banner" style="display: none; margin: 0 0 16px 0;">
+        <div class="pdv-alert-text">
+          <span>🔔</span>
+          <span id="admin-tables-alert-msg">Mesa chamando garçom!</span>
+        </div>
+      </div>
+
+      <!-- Grid de Mesas no Admin -->
+      <div class="tables-grid" id="admin-tables-grid-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 14px;">
+        <!-- Injetado dinamicamente via admin.js -->
+      </div>
+
+    </div>
+  </div>
 
   <!-- Modal de Configuração de Horários & Loja -->
   <div class="admin-modal-overlay" id="hours-settings-modal" style="display: none;">
@@ -643,6 +702,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
   <script src="js/firebase-config.js"></script>
+  <script src="js/qrcode.min.js"></script>
   <script src="js/menu-data.js"></script>
   <script src="js/admin.js"></script>
 </body>

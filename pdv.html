@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>PDV & Garçom Salão | Pizzaria do Elieudo</title>
+  
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="assets/logo_elieudo.png">
+
+  <!-- Google Fonts: Plus Jakarta Sans & Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Folha de Estilos do PDV -->
+  <link rel="stylesheet" href="css/pdv.css">
+  <link rel="stylesheet" href="css/print.css" media="print">
+</head>
+<body>
+
+  <!-- Header Superior do Garçom / Balcão -->
+  <header class="pdv-header">
+    <div class="pdv-brand-wrap">
+      <div class="pdv-logo-icon">🍕</div>
+      <div class="pdv-brand-text">
+        <h1>Pizzaria do Elieudo</h1>
+        <span>🍽️ PDV Salão & Garçom</span>
+      </div>
+    </div>
+
+    <div class="pdv-header-actions">
+      <!-- Seletor Rápido do Garçom -->
+      <div class="waiter-tag" id="btn-change-waiter" onclick="promptWaiterName()" title="Alterar Garçom Responsável">
+        <span>🧑‍🍳</span>
+        <span id="current-waiter-name">Garçom 1</span>
+      </div>
+
+      <!-- Alerta Sonoro -->
+      <button class="btn-header-round active" id="btn-toggle-sound" onclick="toggleSound()" title="Ativar/Desativar Som de Chamada">
+        <span id="sound-icon">🔔</span>
+      </button>
+
+      <!-- Atalho para o Admin -->
+      <a href="admin.html" class="btn-header-round" title="Ir para o Painel Admin / KDS">
+        <span>⚙️</span>
+      </a>
+    </div>
+  </header>
+
+  <!-- Métricas Rápidas das Mesas -->
+  <section class="pdv-metrics-bar">
+    <div class="metric-pill pill-livres active" id="pill-filter-livre" onclick="setTableFilter('livre')">
+      <span class="metric-pill-val" id="metric-livres-count">0</span>
+      <span class="metric-pill-label">Livres</span>
+    </div>
+    <div class="metric-pill pill-ocupadas" id="pill-filter-ocupada" onclick="setTableFilter('ocupada')">
+      <span class="metric-pill-val" id="metric-ocupadas-count">0</span>
+      <span class="metric-pill-label">Ocupadas</span>
+    </div>
+    <div class="metric-pill pill-alertas" id="pill-filter-alerta" onclick="setTableFilter('alerta')">
+      <span class="metric-pill-val" id="metric-alertas-count">0</span>
+      <span class="metric-pill-label">Chamando</span>
+    </div>
+  </section>
+
+  <!-- Banner de Notificação de Chamada ou Conta (Aparece dinamicamente) -->
+  <div id="pdv-alert-banner" class="pdv-alert-banner" style="display: none;">
+    <div class="pdv-alert-text">
+      <span>🔔</span>
+      <span id="pdv-alert-msg">Mesa chamando atendimento!</span>
+    </div>
+    <button class="btn-pdv-secondary" style="padding: 6px 12px; font-size: 0.75rem;" onclick="dismissCurrentAlert()">Atender</button>
+  </div>
+
+  <!-- Filtros de Visualização -->
+  <section class="pdv-filters-bar">
+    <div class="filters-chips">
+      <button class="chip-btn active" id="filter-btn-all" onclick="setTableFilter('all')">Todas (15)</button>
+      <button class="chip-btn" id="filter-btn-livre" onclick="setTableFilter('livre')">🟢 Livres</button>
+      <button class="chip-btn" id="filter-btn-ocupada" onclick="setTableFilter('ocupada')">🔴 Ocupadas</button>
+      <button class="chip-btn" id="filter-btn-alerta" onclick="setTableFilter('alerta')">🟡 Chamados</button>
+    </div>
+  </section>
+
+  <!-- Grid Interativo de Mesas -->
+  <main class="pdv-tables-container">
+    <div class="tables-grid" id="tables-grid-container">
+      <!-- Injetado dinamicamente via pdv.js -->
+    </div>
+  </main>
+
+  <!-- ======================================================== -->
+  <!-- MODAIS DO PDV -->
+  <!-- ======================================================== -->
+
+  <!-- 1. MODAL: ABERTURA DE MESA -->
+  <div class="pdv-modal-backdrop" id="modal-open-table">
+    <div class="pdv-modal-sheet">
+      <div class="pdv-modal-header">
+        <h2 id="open-modal-table-title">Abrir Mesa 00</h2>
+        <button class="btn-close-modal" onclick="closeModal('modal-open-table')">✕</button>
+      </div>
+      <div class="pdv-modal-body">
+        <div class="form-group">
+          <label>Nome do Cliente / Responsável (Opcional)</label>
+          <input type="text" id="input-open-customer" class="form-input" placeholder="Ex: Família Silva, Carlos, Aniversário...">
+        </div>
+        <div class="form-group">
+          <label>Número de Pessoas</label>
+          <input type="number" id="input-open-people" class="form-input" value="2" min="1" max="30">
+        </div>
+        <div class="form-group">
+          <label>Garçom Responsável</label>
+          <input type="text" id="input-open-waiter" class="form-input" readonly>
+        </div>
+      </div>
+      <div class="pdv-modal-footer">
+        <button class="btn-pdv-secondary" onclick="closeModal('modal-open-table')">Cancelar</button>
+        <button class="btn-pdv-primary" id="btn-confirm-open-table" onclick="confirmOpenTable()">
+          <span>✅ Abrir Mesa & Gerar QR Code</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. MODAL: QR CODE DINÂMICO PRIVADO DA MESA -->
+  <div class="pdv-modal-backdrop" id="modal-table-qrcode">
+    <div class="pdv-modal-sheet">
+      <div class="pdv-modal-header">
+        <h2 id="qrcode-modal-title">QR Code Seguro • Mesa 00</h2>
+        <button class="btn-close-modal" onclick="closeModal('modal-table-qrcode')">✕</button>
+      </div>
+      <div class="pdv-modal-body">
+        <div class="qr-code-display-card">
+          <div class="qr-code-frame" id="qrcode-canvas-container">
+            <!-- Gerado via qrcode.min.js -->
+          </div>
+          <div style="font-size: 0.85rem; font-weight: 700; color: #fff; margin-bottom: 4px;" id="qrcode-customer-label">
+            Cliente: Família Silva
+          </div>
+          <div class="qr-token-pill" id="qrcode-token-label">
+            TOKEN: A7K9X2
+          </div>
+          <div id="qrcode-link-display" style="margin-top: 10px; font-size: 0.72rem; max-width: 320px; word-break: break-all;"></div>
+          <p style="font-size: 0.75rem; color: #94a3b8; margin-top: 8px; max-width: 320px;">
+            🔒 <strong>Privacidade Total:</strong> O cliente escaneia com a câmera do celular para acompanhar a comanda e a parcial da conta ao vivo.
+          </p>
+        </div>
+
+        <div style="display: flex; gap: 8px;">
+          <button class="btn-pdv-secondary" style="flex: 1;" onclick="copyTableLink()">
+            <span>📋 Copiar Link</span>
+          </button>
+          <button class="btn-pdv-secondary" style="flex: 1;" onclick="openCustomerViewDirect()">
+            <span>👁️ Abrir Comanda</span>
+          </button>
+        </div>
+      </div>
+      <div class="pdv-modal-footer">
+        <button class="btn-pdv-primary" onclick="proceedToOrderStaging()">
+          <span>🍕 Lançar Itens na Mesa</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. MODAL: GESTÃO & EXTRATO DA MESA -->
+  <div class="pdv-modal-backdrop" id="modal-table-details">
+    <div class="pdv-modal-sheet">
+      <div class="pdv-modal-header">
+        <div>
+          <h2 id="details-modal-title">Mesa 00</h2>
+          <span style="font-size: 0.75rem; color: #94a3b8;" id="details-modal-subtitle">Aberta às 19:40 • Garçom 1</span>
+        </div>
+        <button class="btn-close-modal" onclick="closeModal('modal-table-details')">✕</button>
+      </div>
+      
+      <div class="pdv-modal-body">
+        <!-- Banner se estiver chamando garçom -->
+        <div id="details-call-banner" style="display: none; background: rgba(245, 158, 11, 0.2); border: 1px solid #f59e0b; padding: 10px; border-radius: 10px; margin-bottom: 14px; font-size: 0.85rem; font-weight: 700; color: #fef3c7; display: flex; align-items: center; justify-content: space-between;">
+          <span>🔔 Cliente chamou o garçom nesta mesa!</span>
+          <button class="btn-pdv-secondary" style="padding: 4px 8px; font-size: 0.72rem;" onclick="clearWaiterCallForCurrentTable()">Marcar Atendido</button>
+        </div>
+
+        <!-- Ações Rápidas do Topo -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px;">
+          <button class="btn-pdv-primary" onclick="openOrderLauncher()">
+            <span>➕ Lançar Pedido</span>
+          </button>
+          <button class="btn-pdv-secondary" onclick="showCurrentTableQRCode()">
+            <span>📲 QR Code Cliente</span>
+          </button>
+        </div>
+
+        <!-- Extrato de Rodadas -->
+        <div style="margin-bottom: 8px; font-size: 0.8rem; font-weight: 700; color: #cbd5e1; text-transform: uppercase;">
+          Extrato de Consumo da Mesa
+        </div>
+        <div class="rounds-timeline" id="details-rounds-list">
+          <!-- Injetado dinamicamente -->
+        </div>
+
+        <!-- Total da Mesa -->
+        <div style="background: #0f131a; border: 1px solid var(--pdv-border); border-radius: 12px; padding: 14px; margin-top: 14px; display: flex; align-items: center; justify-content: space-between;">
+          <div>
+            <div style="font-size: 0.75rem; color: #94a3b8;">Total Parcial da Mesa</div>
+            <div style="font-size: 1.35rem; font-weight: 800; color: #10b981;" id="details-total-price">R$ 0,00</div>
+          </div>
+          <button class="btn-pdv-secondary" style="font-size: 0.8rem; padding: 8px 12px;" onclick="printTableReceipt()">
+            <span>🖨️ Pré-Conta</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="pdv-modal-footer">
+        <button class="btn-pdv-secondary" onclick="closeModal('modal-table-details')">Fechar</button>
+        <button class="btn-pdv-primary" style="background: linear-gradient(135deg, #059669, #047857);" onclick="openCloseTableModal()">
+          <span>💳 Fechar Mesa / Pagamento</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. MODAL: LANÇADOR DE COMANDAS & PEDIDOS RÁPIDOS -->
+  <div class="pdv-modal-backdrop" id="modal-order-launcher">
+    <div class="pdv-modal-sheet" style="max-height: 94vh;">
+      <div class="pdv-modal-header">
+        <div>
+          <h2 id="launcher-modal-title">Lançar Itens • Mesa 00</h2>
+          <span style="font-size: 0.72rem; color: #f59e0b;">Cozinha e KDS recebem na hora</span>
+        </div>
+        <button class="btn-close-modal" onclick="closeModal('modal-order-launcher')">✕</button>
+      </div>
+
+      <div class="pdv-modal-body" style="padding-top: 12px;">
+        <!-- Navegação por Categorias -->
+        <div class="category-nav-scroll" id="launcher-category-nav">
+          <button class="cat-scroll-btn active" data-cat="pizzas_tradicionais" onclick="switchLauncherCategory('pizzas_tradicionais')">🍕 Tradicionais</button>
+          <button class="cat-scroll-btn" data-cat="pizzas_premium" onclick="switchLauncherCategory('pizzas_premium')">⭐ Premium / Especiais</button>
+          <button class="cat-scroll-btn" data-cat="pizzas_doces" onclick="switchLauncherCategory('pizzas_doces')">🍫 Doces</button>
+          <button class="cat-scroll-btn" data-cat="esfihas" onclick="switchLauncherCategory('esfihas')">🥟 Esfihas</button>
+          <button class="cat-scroll-btn" data-cat="bebidas" onclick="switchLauncherCategory('bebidas')">🥤 Bebidas & Sucos</button>
+          <button class="cat-scroll-btn" data-cat="meio_a_meio" onclick="switchLauncherCategory('meio_a_meio')">🌓 Meio a Meio</button>
+        </div>
+
+        <!-- Campo de Pesquisa Rápida -->
+        <div class="form-group" style="margin-bottom: 10px;">
+          <input type="text" id="input-launcher-search" class="form-input" style="padding: 8px 12px; font-size: 0.85rem;" placeholder="🔍 Buscar sabor ou bebida..." oninput="filterLauncherItems()">
+        </div>
+
+        <!-- Lista de Produtos da Categoria -->
+        <div class="menu-items-picker-list" id="launcher-items-list">
+          <!-- Injetado dinamicamente -->
+        </div>
+
+        <!-- Box Meio a Meio Especial (aparece quando categoria é meio_a_meio) -->
+        <div id="box-half-builder" style="display: none; background: #121722; border: 1px solid var(--pdv-border); border-radius: 12px; padding: 14px; margin-bottom: 12px;">
+          <div style="font-size: 0.82rem; font-weight: 700; color: #f59e0b; margin-bottom: 8px;">🌓 Montar Pizza Meio a Meio</div>
+          <div class="form-group">
+            <label>1º Sabor (1/2)</label>
+            <select id="select-flavor-1" class="form-input" onchange="updateHalfPrice()"></select>
+          </div>
+          <div class="form-group">
+            <label>2º Sabor (1/2)</label>
+            <select id="select-flavor-2" class="form-input" onchange="updateHalfPrice()"></select>
+          </div>
+          <div class="form-group">
+            <label>Tamanho</label>
+            <select id="select-half-size" class="form-input" onchange="updateHalfPrice()">
+              <option value="G">Grande (G) - 8 fatias</option>
+              <option value="M">Média (M) - 6 fatias</option>
+              <option value="GG">Família (GG) - 12 fatias</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Borda Recheada</label>
+            <select id="select-half-crust" class="form-input" onchange="updateHalfPrice()">
+              <option value="tradicional">Borda Tradicional (R$ 0,00)</option>
+              <option value="catupiry">Catupiry (+R$ 10,00)</option>
+              <option value="cheddar">Cheddar (+R$ 10,00)</option>
+              <option value="chocolate">Chocolate (+R$ 12,00)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Observação (Ex: Sem cebola, bem assada)</label>
+            <input type="text" id="input-half-obs" class="form-input" placeholder="Opcional">
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 10px;">
+            <span style="font-size: 1.1rem; font-weight: 800; color: #10b981;" id="half-calc-price">R$ 0,00</span>
+            <button class="btn-pdv-primary" style="flex: none; padding: 10px 18px;" onclick="addHalfPizzaToStaging()">
+              <span>➕ Incluir Meio a Meio</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Carrinho Provisório desta Rodada -->
+        <div class="round-staging-box">
+          <div class="round-staging-header">
+            <span>🛒 Itens a Lançar nesta Rodada</span>
+            <span id="staging-total-count">0 itens</span>
+          </div>
+          <div id="staging-items-container">
+            <div style="font-size: 0.75rem; color: #64748b; text-align: center; padding: 10px;">Nenhum item selecionado ainda</div>
+          </div>
+          <div style="border-top: 1px solid rgba(255,255,255,0.08); margin-top: 8px; padding-top: 8px; display: flex; justify-content: space-between; font-weight: 800; font-size: 0.95rem;">
+            <span>Subtotal da Rodada:</span>
+            <span style="color: #10b981;" id="staging-subtotal-val">R$ 0,00</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="pdv-modal-footer">
+        <button class="btn-pdv-secondary" onclick="closeModal('modal-order-launcher')">Voltar</button>
+        <button class="btn-pdv-primary" id="btn-dispatch-round" onclick="dispatchStagedRoundToKitchen()">
+          <span>🔥 Enviar Pedido p/ Cozinha</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. MODAL: FECHAMENTO & PAGAMENTO DA MESA -->
+  <div class="pdv-modal-backdrop" id="modal-close-table">
+    <div class="pdv-modal-sheet">
+      <div class="pdv-modal-header">
+        <h2 id="close-modal-title">Fechar Mesa 00</h2>
+        <button class="btn-close-modal" onclick="closeModal('modal-close-table')">✕</button>
+      </div>
+      <div class="pdv-modal-body">
+        <div style="background: #0f131a; border: 1px solid var(--pdv-border); border-radius: 12px; padding: 14px; margin-bottom: 16px;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 0.85rem; color: #cbd5e1;">
+            <span>Consumo da Mesa:</span>
+            <strong id="close-subtotal-val">R$ 0,00</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 0.85rem; color: #cbd5e1;">
+            <span>Desconto (R$):</span>
+            <input type="number" id="input-close-discount" class="form-input" style="width: 100px; padding: 4px 8px; font-size: 0.85rem; text-align: right;" value="0" min="0" oninput="recalculateCloseTotal()">
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 0.85rem; color: #cbd5e1;">
+            <span>Taxa Garçom 10% (Opcional):</span>
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.85rem;">
+              <input type="checkbox" id="check-close-tax" onchange="recalculateCloseTotal()"> Adicionar 10%
+            </label>
+          </div>
+          <div style="border-top: 1px dashed rgba(255,255,255,0.15); padding-top: 10px; display: flex; justify-content: space-between; font-size: 1.25rem; font-weight: 800;">
+            <span>Total a Pagar:</span>
+            <span style="color: #10b981;" id="close-total-val">R$ 0,00</span>
+          </div>
+          <div id="close-split-calc" style="font-size: 0.75rem; color: #94a3b8; margin-top: 4px; text-align: right;">
+            <!-- Divisão por pessoa -->
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Forma de Pagamento</label>
+          <select id="select-close-payment" class="form-input">
+            <option value="PIX">⚡ PIX</option>
+            <option value="Cartão de Crédito">💳 Cartão de Crédito</option>
+            <option value="Cartão de Débito">💳 Cartão de Débito</option>
+            <option value="Dinheiro">💵 Dinheiro</option>
+            <option value="Dividido (Múltiplas Formas)">🔀 Dividido (PIX + Cartão / Dinheiro)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Observação de Fechamento (Opcional)</label>
+          <input type="text" id="input-close-notes" class="form-input" placeholder="Ex: Deixou caixinha no PIX...">
+        </div>
+      </div>
+
+      <div class="pdv-modal-footer">
+        <button class="btn-pdv-secondary" onclick="closeModal('modal-close-table')">Voltar</button>
+        <button class="btn-pdv-primary" style="background: linear-gradient(135deg, #10b981, #059669);" onclick="confirmCloseTable()">
+          <span>✅ Confirmar Pagamento & Liberar Mesa</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Contêiner de Impressão Térmica Oculto -->
+  <div id="pdv-thermal-print" style="display: none;"></div>
+
+  <!-- Firebase Compat Scripts -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
+  <!-- Biblioteca Local de QR Code -->
+  <script src="js/qrcode.min.js"></script>
+
+  <!-- Scripts do Sistema -->
+  <script src="js/firebase-config.js"></script>
+  <script src="js/menu-data.js"></script>
+  <script src="js/pdv.js"></script>
+</body>
+</html>

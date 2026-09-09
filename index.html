@@ -78,6 +78,22 @@
     </div>
   </div>
 
+  <!-- Barra Superior Fixa de Mesa Ativa (QR Code Dinâmico do Salão) -->
+  <div id="table-client-top-bar" class="table-client-top-bar" style="display: none;">
+    <div class="table-client-info">
+      <span class="table-client-badge" id="table-bar-num">🍽️ Mesa 00</span>
+      <span class="table-client-sub" id="table-bar-parcial">Parcial: R$ 0,00</span>
+    </div>
+    <div class="table-client-actions">
+      <button type="button" class="btn-table-call-waiter" id="btn-bar-call-waiter" onclick="clientCallWaiter()">
+        <span>🙋‍♂️ Garçom</span>
+      </button>
+      <button type="button" class="btn-table-view-bill" onclick="openClientTableModal()">
+        <span>📋 Ver Comanda</span>
+      </button>
+    </div>
+  </div>
+
   <!-- Sticky Categories Navigation Bar -->
   <nav class="sticky-nav">
     <div class="nav-container" id="category-tabs-container">
@@ -316,6 +332,60 @@
         <button type="button" class="btn-new-order-dismiss" onclick="dismissOrderSuccessModal()">
           🍕 Voltar ao Cardápio
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Comanda Digital Privada da Mesa do Cliente (Frente 2) -->
+  <div class="modal-overlay" id="client-table-modal">
+    <div class="modal-content table-modal-content">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 1.6rem;">🍽️</span>
+          <div>
+            <h2 class="modal-title" id="client-modal-title">Minha Mesa 00</h2>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;" id="client-modal-subtitle">Comanda ao vivo protegida</p>
+          </div>
+        </div>
+        <button type="button" class="btn-close" onclick="closeClientTableModal()">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Status / Avisos da Mesa -->
+        <div id="client-waiter-called-msg" style="display: none; background: rgba(245, 158, 11, 0.2); border: 1px solid #f59e0b; padding: 10px 14px; border-radius: 10px; margin-bottom: 12px; font-size: 0.85rem; font-weight: 700; color: #fef3c7; text-align: center;">
+          🙋‍♂️ Garçom chamado! Um atendente virá à sua mesa em instantes.
+        </div>
+
+        <div id="client-bill-requested-msg" style="display: none; background: rgba(16, 185, 129, 0.2); border: 1px solid #10b981; padding: 10px 14px; border-radius: 10px; margin-bottom: 12px; font-size: 0.85rem; font-weight: 700; color: #a7f3d0; text-align: center;">
+          🧾 Conta solicitada! O garçom já está trazendo a conferência / maquineta.
+        </div>
+
+        <!-- Extrato de Rodadas / Pedidos -->
+        <div style="font-size: 0.8rem; font-weight: 700; color: #cbd5e1; text-transform: uppercase; margin-bottom: 8px;">
+          Seus Pedidos nesta Mesa
+        </div>
+        <div class="client-rounds-list" id="client-rounds-container">
+          <!-- Injetado via JS -->
+        </div>
+
+        <!-- Card de Parcial da Conta -->
+        <div class="client-bill-card">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+            <span style="font-size: 0.85rem; color: #94a3b8;">Total Parcial da Conta:</span>
+            <span style="font-size: 1.4rem; font-weight: 800; color: #10b981;" id="client-bill-total">R$ 0,00</span>
+          </div>
+          <p style="font-size: 0.75rem; color: #64748b; margin: 0;">O valor atualiza automaticamente a cada novo item servido.</p>
+        </div>
+
+        <!-- Ações de Interação -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px;">
+          <button type="button" class="btn-client-call" id="btn-modal-call-waiter" onclick="clientCallWaiter()">
+            <span>🙋‍♂️ Chamar Garçom</span>
+          </button>
+          <button type="button" class="btn-client-bill" id="btn-modal-request-bill" onclick="clientRequestBill()">
+            <span>🧾 Pedir a Conta</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>

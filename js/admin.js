@@ -28,7 +28,9 @@ const adminState = {
   coupons: [],
   couponModalType: "percent",
   // Frente 4: Relatórios
-  reportsPeriod: "today"
+  reportsPeriod: "today",
+  // Frente 5: Salão de Mesas & PDV
+  tables: {}
 };
 
 // Formatação BRL
@@ -53,6 +55,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setupTabNavigation();
   setupStockControls();
   updateCloudStatusIndicator();
+  setupAdminTablesRealtime();
 });
 
 // Carregar pedidos do LocalStorage
@@ -103,7 +106,9 @@ function setupCloudAndBroadcastSync() {
     fbListenOutOfStock((list) => {
       if (list && Array.isArray(list)) {
         adminState.outOfStock = list;
-        updateStockCounters();
+        if (typeof renderStockManager === "function") {
+          renderStockManager();
+        }
       }
     });
   }
@@ -227,26 +232,33 @@ function createOrderCardElement(order) {
   card.className = `order-card ${order.status === 'pendente' ? 'highlight-new' : ''}`;
   card.id = `card-${order.id.replace('#', '')}`;
 
+  const isMesa = order.deliveryType === "mesa";
+  let typeLabel = "🛵 Entrega";
+  if (order.deliveryType === "balcao") typeLabel = "🏪 Balcão";
+  if (isMesa) typeLabel = `🍽️ Mesa ${order.tableNumber < 10 ? '0' + order.tableNumber : order.tableNumber}`;
+
   // Botões de ação dependendo do status atual
   let nextActionBtn = "";
   if (order.status === "pendente") {
     nextActionBtn = `<button class="btn-card-action btn-advance" onclick="changeOrderStatus('${order.id}', 'preparando')">🔥 Iniciar Forno</button>`;
   } else if (order.status === "preparando") {
-    nextActionBtn = `<button class="btn-card-action btn-advance" onclick="changeOrderStatus('${order.id}', 'entrega')">🛵 Pronto / Despachar</button>`;
+    nextActionBtn = isMesa
+      ? `<button class="btn-card-action btn-advance" style="background: #10b981;" onclick="changeOrderStatus('${order.id}', 'entrega')">🍽️ Servir na Mesa</button>`
+      : `<button class="btn-card-action btn-advance" onclick="changeOrderStatus('${order.id}', 'entrega')">🛵 Pronto / Despachar</button>`;
   } else if (order.status === "entrega") {
-    nextActionBtn = `<button class="btn-card-action btn-advance" onclick="changeOrderStatus('${order.id}', 'finalizado')">✅ Concluir Entrega</button>`;
+    nextActionBtn = `<button class="btn-card-action btn-advance" onclick="changeOrderStatus('${order.id}', 'finalizado')">✅ Concluir</button>`;
   }
 
   card.innerHTML = `
     <div class="order-card-header">
       <span class="order-id">${order.id}</span>
-      <span class="order-time">🕒 ${order.timeStr} (${order.deliveryType === 'delivery' ? '🛵 Entrega' : '🏪 Balcão'})</span>
+      <span class="order-time" style="${isMesa ? 'color: #10b981; font-weight: bold;' : ''}">🕒 ${order.timeStr} (${typeLabel})</span>
     </div>
 
     <div class="order-customer">
       <span class="customer-name">${order.customer.name} ${order.customer.phone ? `• ${order.customer.phone}` : ''}</span>
       ${order.customer.address ? `<span class="customer-address">📍 ${order.customer.address}</span>` : ''}
-      ${order.customer.reference ? `<span class="customer-address">📌 Ref: ${order.customer.reference}</span>` : ''}
+      ${order.customer.reference ? `<span class="customer-address">📌 ${order.customer.reference}</span>` : ''}
     </div>
 
     <div class="order-items-box">
@@ -264,9 +276,11 @@ function createOrderCardElement(order) {
         <div class="order-total-price">${formatBRL(order.subtotal || 0)}</div>
       </div>
       <div class="order-card-actions">
-        <button class="btn-card-action btn-notify-customer" onclick="notifyCustomerViaWhatsApp('${order.id}')" title="Avisar Cliente no WhatsApp com Link de Rastreio">📲 Avisar</button>
+        ${!isMesa && order.customer && order.customer.phone ? `
+          <button class="btn-card-action btn-notify-customer" onclick="notifyCustomerViaWhatsApp('${order.id}')" title="Avisar Cliente no WhatsApp com Link de Rastreio">📲 Avisar</button>
+        ` : ''}
         <button class="btn-card-action" onclick="printKitchenOrder('${order.id}')" title="Imprimir Comanda do Forno">🖨️ Forno</button>
-        <button class="btn-card-action" onclick="printReceiptOrder('${order.id}')" title="Imprimir Via do Cliente">🧾 Cliente</button>
+        <button class="btn-card-action" onclick="printReceiptOrder('${order.id}')" title="Imprimir Via do Cliente">🧾 Recibo</button>
         ${nextActionBtn}
       </div>
     </div>
@@ -340,19 +354,24 @@ function printKitchenOrder(orderId) {
   const container = document.getElementById("admin-thermal-receipt");
   if (!container) return;
 
+  const isMesa = order.deliveryType === "mesa";
+  const typeLabel = isMesa ? `🍽️ MESA ${order.tableNumber < 10 ? '0' + order.tableNumber : order.tableNumber}` : order.deliveryType.toUpperCase();
+
   container.innerHTML = `
     <div style="text-align: center; border-bottom: 2px dashed #000; padding-bottom: 6px; margin-bottom: 8px;">
       <h2 style="font-size: 18px; margin: 0; text-transform: uppercase;">🔥 COZINHA / FORNO 🔥</h2>
-      <div style="font-size: 16px; font-weight: bold;">PEDIDO ${order.id}</div>
-      <div style="font-size: 12px;">Hora: ${order.timeStr} | ${order.deliveryType.toUpperCase()}</div>
+      <div style="font-size: 17px; font-weight: bold; margin: 4px 0;">PEDIDO ${order.id}</div>
+      <div style="font-size: 14px; font-weight: 800; background: #eee; padding: 3px; border-radius: 4px;">${typeLabel}</div>
+      <div style="font-size: 12px; margin-top: 3px;">Hora: ${order.timeStr}</div>
     </div>
     
-    <div style="margin-bottom: 8px;">
+    <div style="margin-bottom: 8px; font-size: 13px;">
       <div><strong>CLIENTE:</strong> ${order.customer.name}</div>
+      ${order.customer.reference ? `<div><strong>INFO:</strong> ${order.customer.reference}</div>` : ''}
     </div>
 
     <div style="border-top: 1px solid #000; padding-top: 6px; margin-bottom: 8px;">
-      <div style="font-weight: bold; font-size: 14px; margin-bottom: 4px;">ITENS:</div>
+      <div style="font-weight: bold; font-size: 14px; margin-bottom: 4px;">ITENS DO PEDIDO:</div>
       ${(order.items || []).map(item => `
         <div style="margin-bottom: 6px; border-bottom: 1px dotted #ccc; padding-bottom: 4px;">
           <div style="font-size: 14px; font-weight: bold;">${item.quantity}x ${item.flavorDescription || item.name}</div>
@@ -548,10 +567,11 @@ function saveStockStatus() {
   }
 }
 
-// Alternar entre abas (KDS vs Gestão de Sabores)
+// Alternar entre abas (KDS vs Mesas vs Estoque vs Cupons vs Relatórios)
 function setupTabNavigation() {
   const tabs = [
     { btnId: "tab-btn-kds", viewId: "view-kds", name: "kds", onOpen: null },
+    { btnId: "tab-btn-tables", viewId: "view-tables", name: "tables", onOpen: renderAdminTables },
     { btnId: "tab-btn-stock", viewId: "view-stock", name: "stock", onOpen: renderStockManager },
     { btnId: "tab-btn-coupons", viewId: "view-coupons", name: "coupons", onOpen: renderCouponsList },
     { btnId: "tab-btn-reports", viewId: "view-reports", name: "reports", onOpen: renderReports }
@@ -1778,6 +1798,7 @@ function renderReports() {
   let paymentTotals = { pix: 0, cartao: 0, dinheiro: 0 };
   let deliveryCount = 0;
   let balcaoCount = 0;
+  let mesaCount = 0;
   let productStats = {};
 
   orders.forEach(o => {
@@ -1802,6 +1823,8 @@ function renderReports() {
     // Modalidade
     if (o.deliveryType === "delivery") {
       deliveryCount++;
+    } else if (o.deliveryType === "mesa") {
+      mesaCount++;
     } else {
       balcaoCount++;
     }
@@ -1881,12 +1904,13 @@ function renderReports() {
     `;
   }
 
-  // Split Delivery vs Balcão
+  // Split Delivery vs Balcão vs Salão/Mesas
   const delivCard = document.getElementById("rep-delivery-split-card");
   if (delivCard) {
-    const totalSplit = (deliveryCount + balcaoCount) || 1;
+    const totalSplit = (deliveryCount + balcaoCount + mesaCount) || 1;
     const delivPct = Math.round((deliveryCount / totalSplit) * 100);
     const balcaoPct = Math.round((balcaoCount / totalSplit) * 100);
+    const mesaPct = Math.round((mesaCount / totalSplit) * 100);
 
     delivCard.innerHTML = `
       <div class="split-stat-row">
@@ -1901,6 +1925,13 @@ function renderReports() {
           <span>🏪 Retirada no Balcão</span>
         </div>
         <div class="split-stat-val" style="color: #60a5fa;">${balcaoCount} (${balcaoPct}%)</div>
+      </div>
+
+      <div class="split-stat-row">
+        <div class="split-stat-label">
+          <span>🍽️ Salão & Mesas</span>
+        </div>
+        <div class="split-stat-val" style="color: #f59e0b;">${mesaCount} (${mesaPct}%)</div>
       </div>
     `;
   }
@@ -1958,6 +1989,7 @@ function printCashClosingReceipt() {
   let payCounts = { pix: 0, cartao: 0, dinheiro: 0 };
   let deliveryCount = 0;
   let balcaoCount = 0;
+  let mesaCount = 0;
 
   orders.forEach(o => {
     const val = o.totalPrice !== undefined ? o.totalPrice : (o.subtotal || 0);
@@ -1969,7 +2001,9 @@ function printCashClosingReceipt() {
     else if (pay.includes("cart") || pay.includes("crédito") || pay.includes("débito")) { payTotals.cartao += val; payCounts.cartao++; }
     else { payTotals.dinheiro += val; payCounts.dinheiro++; }
 
-    if (o.deliveryType === "delivery") deliveryCount++; else balcaoCount++;
+    if (o.deliveryType === "delivery") deliveryCount++;
+    else if (o.deliveryType === "mesa") mesaCount++;
+    else balcaoCount++;
   });
 
   const now = new Date();
@@ -1987,7 +2021,7 @@ function printCashClosingReceipt() {
       
       <div><strong>Período:</strong> ${periodLabel}</div>
       <div><strong>Total de Pedidos:</strong> ${orders.length}</div>
-      <div><strong>Delivery:</strong> ${deliveryCount} | <strong>Balcão:</strong> ${balcaoCount}</div>
+      <div><strong>Delivery:</strong> ${deliveryCount} | <strong>Balcão:</strong> ${balcaoCount} | <strong>Salão/Mesas:</strong> ${mesaCount}</div>
       <div style="border-top: 1px dashed #000; margin: 6px 0;"></div>
 
       <div style="font-weight: bold; margin-bottom: 4px;">FORMAS DE PAGAMENTO:</div>
@@ -2045,6 +2079,7 @@ function copyClosingToWhatsApp() {
   let payCounts = { pix: 0, cartao: 0, dinheiro: 0 };
   let deliveryCount = 0;
   let balcaoCount = 0;
+  let mesaCount = 0;
 
   orders.forEach(o => {
     const val = o.totalPrice !== undefined ? o.totalPrice : (o.subtotal || 0);
@@ -2057,7 +2092,9 @@ function copyClosingToWhatsApp() {
     else if (pay.includes("cart") || pay.includes("crédito") || pay.includes("débito")) { payTotals.cartao += val; payCounts.cartao++; }
     else { payTotals.dinheiro += val; payCounts.dinheiro++; }
 
-    if (o.deliveryType === "delivery") deliveryCount++; else balcaoCount++;
+    if (o.deliveryType === "delivery") deliveryCount++;
+    else if (o.deliveryType === "mesa") mesaCount++;
+    else balcaoCount++;
   });
 
   const now = new Date();
@@ -2082,6 +2119,7 @@ function copyClosingToWhatsApp() {
   msg += `🛵 *MODALIDADE DE ATENDIMENTO:*\n`;
   msg += `• Delivery (Entrega): ${deliveryCount} pedidos\n`;
   msg += `• Retirada no Balcão: ${balcaoCount} pedidos\n`;
+  msg += `• Salão / Mesas: ${mesaCount} pedidos\n`;
   msg += `-------------------------------------------\n`;
   msg += `_Emitido pelo Painel Operacional Elieudo_`;
 
@@ -2096,5 +2134,161 @@ function copyClosingToWhatsApp() {
   }
 }
 window.copyClosingToWhatsApp = copyClosingToWhatsApp;
+
+// ============================================================
+// FRENTE 5: GESTÃO DO SALÃO DE MESAS NO ADMIN
+// ============================================================
+
+function setupAdminTablesRealtime() {
+  if (typeof fbListenTables === "function") {
+    fbListenTables((tablesObj) => {
+      if (tablesObj && typeof tablesObj === "object") {
+        adminState.tables = tablesObj;
+        updateSaloonHeaderMetrics();
+        if (adminState.activeTab === "tables") {
+          renderAdminTables();
+        }
+      }
+    });
+  }
+}
+
+function updateSaloonHeaderMetrics() {
+  const tables = adminState.tables || {};
+  const tableKeys = Object.keys(tables);
+  let occupiedCount = 0;
+  let alertCount = 0;
+
+  tableKeys.forEach(k => {
+    const t = tables[k];
+    if (t.status === "ocupada" || t.status === "aguardando_conta") occupiedCount++;
+    if (t.callWaiter || t.status === "aguardando_conta") alertCount++;
+  });
+
+  const badgeEl = document.getElementById("badge-tables-occupied-count");
+  if (badgeEl) {
+    badgeEl.innerText = `${occupiedCount} ocupadas`;
+    badgeEl.style.background = occupiedCount > 0 ? "rgba(239, 68, 68, 0.2)" : "rgba(16, 185, 129, 0.2)";
+    badgeEl.style.color = occupiedCount > 0 ? "#f87171" : "#34d399";
+  }
+
+  const elOcc = document.getElementById("admin-saloon-occupied");
+  const elAlert = document.getElementById("admin-saloon-alerts");
+  if (elOcc) elOcc.innerText = `${occupiedCount} / ${tableKeys.length || 15}`;
+  if (elAlert) elAlert.innerText = alertCount;
+
+  // Banner no painel de mesas
+  const banner = document.getElementById("admin-tables-alert-banner");
+  const msgEl = document.getElementById("admin-tables-alert-msg");
+  if (banner && msgEl) {
+    if (alertCount > 0) {
+      msgEl.innerText = `Existem ${alertCount} mesa(s) chamando garçom ou aguardando conta!`;
+      banner.style.display = "flex";
+    } else {
+      banner.style.display = "none";
+    }
+  }
+}
+
+function renderAdminTables() {
+  const container = document.getElementById("admin-tables-grid-container");
+  if (!container) return;
+
+  const tables = adminState.tables || {};
+  const tableKeys = Object.keys(tables).sort((a, b) => {
+    return (tables[a].number || 0) - (tables[b].number || 0);
+  });
+
+  container.innerHTML = "";
+
+  let saloonTodayRev = 0;
+  const todayStr = new Date().toLocaleDateString('pt-BR');
+
+  // Calcular faturamento do salão hoje a partir dos pedidos
+  (adminState.orders || []).forEach(o => {
+    if (o.deliveryType === "mesa" && o.dateStr === todayStr) {
+      saloonTodayRev += (o.totalPrice !== undefined ? o.totalPrice : (o.subtotal || 0));
+    }
+  });
+
+  const revEl = document.getElementById("admin-saloon-revenue");
+  if (revEl) revEl.innerText = formatBRL(saloonTodayRev);
+
+  tableKeys.forEach(k => {
+    const t = tables[k];
+    const isLivre = t.status === "livre" || !t.currentSession;
+    const isCalling = t.callWaiter === true;
+    const isRequestingBill = t.status === "aguardando_conta";
+
+    const card = document.createElement("div");
+    let statusClass = `status-${t.status || 'livre'}`;
+    if (isCalling) statusClass += " calling-waiter";
+    card.className = `table-card ${statusClass}`;
+    card.title = isLivre ? "Mesa Livre. Clique para abrir no PDV." : "Mesa em atendimento.";
+    card.onclick = () => {
+      window.open(`pdv.html`, "_blank");
+    };
+
+    let statusText = "Livre";
+    if (isCalling) statusText = "🔔 Chamando!";
+    else if (isRequestingBill) statusText = "🧾 Pede Conta";
+    else if (t.status === "ocupada") statusText = "Ocupada";
+
+    card.innerHTML = `
+      ${isCalling ? `<span class="call-waiter-badge">🔔 Chamar</span>` : ''}
+      <span class="table-num">${t.number < 10 ? '0' + t.number : t.number}</span>
+      <span class="table-badge">${statusText}</span>
+
+      <div class="table-details-box">
+        ${isLivre ? `
+          <span style="font-size: 0.68rem; color: #64748b;">Disponível</span>
+        ` : `
+          <span class="table-customer-name">${t.currentSession.customerName || 'Cliente'}</span>
+          <div class="table-total-val">${formatBRL(t.currentSession.total || 0)}</div>
+        `}
+      </div>
+    `;
+
+    container.appendChild(card);
+  });
+}
+window.renderAdminTables = renderAdminTables;
+
+// Impressão de Placas / Cartões de QR Code para todas as mesas
+function printAllTablesQRCodes() {
+  const container = document.getElementById("admin-thermal-receipt");
+  if (!container) return;
+
+  const tables = adminState.tables || {};
+  const tableKeys = Object.keys(tables).sort((a, b) => (tables[a].number || 0) - (tables[b].number || 0));
+
+  let baseUrl = window.location.origin && window.location.origin !== "null" && !window.location.href.startsWith("file:")
+    ? window.location.origin + window.location.pathname.replace("admin.html", "index.html")
+    : "https://romariog3fis-collab.github.io/pizzaria-do-elieudo/index.html";
+
+  container.innerHTML = `
+    <div style="font-family: Arial, sans-serif; padding: 20px; color: #000; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px;">
+      ${tableKeys.map(k => {
+        const t = tables[k];
+        const num = t.number < 10 ? '0' + t.number : t.number;
+        const qrUrl = `${baseUrl}?mesa=${t.number}`;
+        const qrImgApi = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(qrUrl)}`;
+
+        return `
+          <div style="border: 2px solid #000; border-radius: 12px; padding: 14px; text-align: center; background: #fff;">
+            <div style="font-size: 14px; font-weight: bold; color: #c21a1a;">PIZZARIA DO ELIEUDO</div>
+            <div style="font-size: 26px; font-weight: 900; margin: 4px 0;">MESA ${num}</div>
+            <img src="${qrImgApi}" style="width: 140px; height: 140px; margin: 6px auto; display: block;" alt="QR Code Mesa ${num}">
+            <div style="font-size: 12px; font-weight: bold; margin-top: 4px;">ACOMPANHE SUA CONTA</div>
+            <div style="font-size: 10px; color: #555;">Peça ao garçom o token ao abrir</div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+
+  window.print();
+}
+window.printAllTablesQRCodes = printAllTablesQRCodes;
 
 
