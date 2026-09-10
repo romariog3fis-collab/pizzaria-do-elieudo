@@ -876,7 +876,8 @@ function openCloseTableModal() {
   document.getElementById("close-modal-title").innerText = `Fechar Mesa ${table.number < 10 ? '0' + table.number : table.number}`;
   document.getElementById("close-subtotal-val").innerText = formatBRL(table.currentSession.subtotal || 0);
   document.getElementById("input-close-discount").value = "0";
-  document.getElementById("check-close-tax").checked = false;
+  // Requisito: Deixar os 10% já selecionados por padrão!
+  document.getElementById("check-close-tax").checked = true;
   document.getElementById("input-close-notes").value = "";
 
   recalculateCloseTotal();
@@ -910,32 +911,51 @@ window.recalculateCloseTotal = recalculateCloseTotal;
 
 async function confirmCloseTable() {
   const tableKey = pdvState.selectedTableKey;
-  const table = pdvState.tables[tableKey];
-  if (!table || !table.currentSession) return;
-
-  const payment = document.getElementById("select-close-payment").value;
-  const discount = parseFloat(document.getElementById("input-close-discount").value) || 0;
-  const hasTax = document.getElementById("check-close-tax").checked;
-  const serviceTax = hasTax ? ((table.currentSession.subtotal || 0) * 0.1) : 0;
-  const notes = document.getElementById("input-close-notes").value;
-
-  if (!confirm(`Confirma o encerramento da Mesa ${table.number} no valor de ${document.getElementById("close-total-val").innerText}?`)) {
+  let table = pdvState.tables[tableKey];
+  if (!table) {
+    alert("Nenhuma mesa selecionada para encerramento.");
     return;
   }
 
+  const btnConfirm = document.querySelector("#modal-close-table .btn-pdv-primary");
+  if (btnConfirm) {
+    btnConfirm.disabled = true;
+    btnConfirm.innerHTML = `<span>⏳ Encerrando e liberando mesa...</span>`;
+  }
+
+  const payment = document.getElementById("select-close-payment").value;
+  const discount = Math.max(0, parseFloat(document.getElementById("input-close-discount").value) || 0);
+  const hasTax = document.getElementById("check-close-tax").checked;
+  const subtotal = (table.currentSession && table.currentSession.subtotal) ? table.currentSession.subtotal : 0;
+  const serviceTax = hasTax ? (subtotal * 0.10) : 0;
+  const notes = document.getElementById("input-close-notes").value;
+
   try {
-    await fbCloseTable(table.number, {
+    const res = await fbCloseTable(table.number, {
       paymentMethod: payment,
       discount: discount,
       serviceTax: serviceTax,
-      notes: notes
+      notes: notes,
+      hasTax: hasTax
     });
 
     closeModal("modal-close-table");
+    closeModal("modal-table-details");
+
+    // Limpa estado selecionado e re-renderiza o grid
+    pdvState.selectedTableKey = null;
+    renderTablesGrid();
+
     playNotificationChime("success");
     alert(`🎉 Mesa ${table.number} encerrada com sucesso e liberada para novos clientes!`);
   } catch (err) {
-    alert("Erro ao encerrar mesa: " + err.message);
+    console.error("Erro ao encerrar mesa:", err);
+    alert("Erro ao encerrar mesa: " + (err.message || err));
+  } finally {
+    if (btnConfirm) {
+      btnConfirm.disabled = false;
+      btnConfirm.innerHTML = `<span>✅ Confirmar Pagamento & Liberar Mesa</span>`;
+    }
   }
 }
 window.confirmCloseTable = confirmCloseTable;

@@ -1710,14 +1710,17 @@ function onClientTableDataReceived(res) {
 
     const num = res.table.number;
     const numStr = num < 10 ? '0' + num : num;
-    const total = res.table.currentSession.total || res.table.currentSession.subtotal || 0;
+    const subtotal = res.table.currentSession.subtotal || 0;
+    const includeTax = res.table.currentSession.includeServiceTax !== false && res.table.currentSession.taxDisabled !== true;
+    const taxAmount = includeTax ? (subtotal * 0.10) : 0;
+    const totalWithTax = Math.max(0, subtotal - (res.table.currentSession.discountAmount || 0) + taxAmount);
 
     // Atualizar Barra Superior Fixa
     if (topBar) {
       const numEl = document.getElementById("table-bar-num");
       const subEl = document.getElementById("table-bar-parcial");
       if (numEl) numEl.innerText = `🍽️ Mesa ${numStr}`;
-      if (subEl) subEl.innerText = `Parcial: ${formatMoney(total)}`;
+      if (subEl) subEl.innerText = `Total: ${formatMoney(totalWithTax)}`;
       topBar.style.display = "flex";
     }
 
@@ -1877,7 +1880,29 @@ function renderClientTableDetails() {
 
   if (titleEl) titleEl.innerText = `Mesa ${num < 10 ? '0' + num : num} • ${session.customerName || 'Cliente'}`;
   if (subEl) subEl.innerText = `Aberta às ${session.openedTimeStr || '--:--'} • Atendida por ${session.waiterName || 'Salão'}`;
-  if (totalEl) totalEl.innerText = formatMoney(session.total || session.subtotal || 0);
+  const subtotal = session.subtotal || (session.rounds && Array.isArray(session.rounds) ? session.rounds.reduce((sum, r) => sum + (r.subtotal || 0), 0) : 0);
+  const includeTax = session.includeServiceTax !== false && session.taxDisabled !== true;
+  const taxAmount = includeTax ? (subtotal * 0.10) : 0;
+  const totalWithTax = Math.max(0, subtotal - (session.discountAmount || 0) + taxAmount);
+
+  const subtotalEl = document.getElementById("client-bill-subtotal");
+  const taxRowEl = document.getElementById("client-bill-tax-row");
+  const taxEl = document.getElementById("client-bill-tax");
+  const footnoteEl = document.getElementById("client-bill-footnote");
+
+  if (subtotalEl) subtotalEl.innerText = formatMoney(subtotal);
+  if (totalEl) totalEl.innerText = formatMoney(totalWithTax);
+
+  if (taxRowEl) {
+    if (includeTax && subtotal > 0) {
+      taxRowEl.style.display = "flex";
+      if (taxEl) taxEl.innerText = formatMoney(taxAmount);
+      if (footnoteEl) footnoteEl.innerText = "Taxa de atendimento de 10% inclusa (opcional no fechamento).";
+    } else {
+      taxRowEl.style.display = "none";
+      if (footnoteEl) footnoteEl.innerText = "Taxa de atendimento de 10% desabilitada.";
+    }
+  }
 
   // Avisos de Garçom ou Conta
   const callMsg = document.getElementById("client-waiter-called-msg");

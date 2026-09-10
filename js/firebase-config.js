@@ -1068,63 +1068,127 @@ async function fbRequestBill(tableNum) {
  * Fechamento e Pagamento da Mesa:
  * Registra o histórico consolidado e libera a mesa imediatamente, destruindo o token de sessão
  */
-async function fbCloseTable(tableNum, { paymentMethod = "Dinheiro", discount = 0, serviceTax = 0, notes = "" }) {
-  const formattedKey = typeof tableNum === "number" 
-    ? `mesa_${tableNum < 10 ? '0' + tableNum : tableNum}`
-    : (tableNum.startsWith("mesa_") ? tableNum : `mesa_${parseInt(tableNum) < 10 ? '0' + parseInt(tableNum) : tableNum}`);
+/**
+ * Fechamento e Pagamento da Mesa:
+ * Registra o histórico consolidado e libera a mesa imediatamente, destruindo o token de sessão
+ */
+async function fbCloseTable(tableNum, { paymentMethod = "Dinheiro", discount = 0, serviceTax = 0, notes = "", hasTax = true }) {
+  const cleanNum = typeof tableNum === "number" 
+    ? tableNum 
+    : (parseInt(String(tableNum).replace(/\D/g, ""), 10) || 1);
+  const formattedKey = `mesa_${cleanNum < 10 ? '0' + cleanNum : cleanNum}`;
 
-  const tables = getLocalTables();
-  const table = tables[formattedKey];
-  if (!table || !table.currentSession) {
-    return false;
+  // 1. Tenta obter a sessão de todas as fontes disponíveis:
+  // (a) localStorage, (b) pdvState global, (c) Firebase RTDB direto
+  let tables = getLocalTables();
+  let table = (tables && tables[formattedKey]) || null;
+  let session = (table && table.currentSession) ? table.currentSession : null;
+
+  if (!session && typeof window !== "undefined" && window.pdvState && window.pdvState.tables) {
+    const memTable = window.pdvState.tables[formattedKey];
+    if (memTable && memTable.currentSession) {
+      table = memTable;
+      session = memTable.currentSession;
+    }
   }
 
-  const session = table.currentSession;
-  const numInt = table.number || parseInt(formattedKey.replace("mesa_", ""), 10);
+  // Se ainda não achou sessão, busca diretamente do Firebase RTDB
+  if ((!session || !table) && isFirebaseReady && fbDb) {
+    try {
+      const snap = await fbDb.ref(`tables/${formattedKey}`).once("value");
+      const fbVal = snap.val();
+      if (fbVal) {
+        table = fbVal;
+        session = fbVal.currentSession;
+      }
+    } catch (e) {
+      console.warn("Erro ao buscar mesa no Firebase:", e);
+    }
+  }
+
+  // Se mesmo assim não achou sessão, cria uma sessão básica para fechar com segurança
+  if (!session) {
+    session = {
+      customerName: `Cliente Mesa ${cleanNum < 10 ? '0' + cleanNum : cleanNum}`,
+      rounds: [],
+      subtotal: 0,
+      total: 0
+    };
+  }
+
   const now = new Date();
+  const subtotal = session.subtotal || (session.rounds && Array.isArray(session.rounds) ? session.rounds.reduce((acc, r) => acc + (r.subtotal || 0), 0) : 0);
+  const numDiscount = Math.max(0, parseFloat(discount) || 0);
+  const numTax = Math.max(0, parseFloat(serviceTax) || 0);
+  const finalTotal = Math.max(0, subtotal - numDiscount + numTax);
 
   const finalOrderRecord = {
-    id: `#CONTA-M${numInt < 10 ? '0' + numInt : numInt}-${Date.now().toString().slice(-4)}`,
+    id: `#CONTA-M${cleanNum < 10 ? '0' + cleanNum : cleanNum}-${Date.now().toString().slice(-4)}`,
     timestamp: Date.now(),
     dateStr: now.toLocaleDateString('pt-BR'),
     timeStr: now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
     customer: {
-      name: `Mesa ${numInt < 10 ? '0' + numInt : numInt} - ${session.customerName}`,
+      name: `Mesa ${cleanNum < 10 ? '0' + cleanNum : cleanNum} - ${session.customerName || 'Cliente'}`,
       phone: "",
       address: "Atendimento no Salão",
       reference: `Garçom: ${session.waiterName || 'Salão'} | Pessoas: ${session.numPeople || 1}`
     },
     deliveryType: "mesa",
-    tableNumber: numInt,
+    tableNumber: cleanNum,
     paymentMethod: paymentMethod,
-    items: session.rounds.reduce((acc, r) => acc.concat(r.items || []), []),
-    subtotal: session.subtotal || 0,
-    discountAmount: parseFloat(discount) || 0,
-    serviceTax: parseFloat(serviceTax) || 0,
-    totalPrice: Math.max(0, (session.subtotal || 0) - (parseFloat(discount) || 0) + (parseFloat(serviceTax) || 0)),
+    items: (session.rounds && Array.isArray(session.rounds)) ? session.rounds.reduce((acc, r) => acc.concat(r.items || []), []) : [],
+    subtotal: subtotal,
+    discountAmount: numDiscount,
+    serviceTax: numTax,
+    totalPrice: finalTotal,
+    total: finalTotal,
     notes: notes,
     status: "finalizado"
   };
 
-  // Salva no banco de pedidos finalizados
+  // 2. Salva no banco de pedidos finalizados
   try {
     await fbSaveOrder(finalOrderRecord);
   } catch (e) {
-    console.error("Erro ao salvar fechamento no histórico:", e);
+    console.warn("Aviso ao salvar fechamento no histórico:", e);
   }
 
-  // Libera a mesa e destrói o token da sessão
-  table.status = "livre";
-  table.callWaiter = false;
-  table.callWaiterTime = null;
-  table.requestBillTime = null;
-  table.currentSession = null;
+  // 3. Finaliza no KDS todas as rodadas pendentes desta mesa para limpar a fila da cozinha
+  if (session.rounds && Array.isArray(session.rounds)) {
+    session.rounds.forEach(r => {
+      if (r.orderId) {
+        try {
+          fbUpdateOrderStatus(r.orderId, "finalizado");
+        } catch (e) {}
+      }
+    });
+  }
 
+  // 4. Estrutura limpa da mesa liberada
+  const clearedTable = {
+    number: cleanNum,
+    name: `Mesa ${cleanNum < 10 ? '0' + cleanNum : cleanNum}`,
+    status: "livre",
+    callWaiter: false,
+    callWaiterTime: null,
+    requestBillTime: null,
+    currentSession: null
+  };
+
+  // Salva no localStorage
+  tables = getLocalTables();
+  tables[formattedKey] = clearedTable;
   saveLocalTables(tables);
 
+  // Atualiza memória do PDV se existir
+  if (typeof window !== "undefined" && window.pdvState && window.pdvState.tables) {
+    window.pdvState.tables[formattedKey] = clearedTable;
+  }
+
+  // 5. LIBERA NO FIREBASE RTDB E DESTRÓI O TOKEN DA SESSÃO
   if (isFirebaseReady && fbDb) {
     try {
-      await fbDb.ref(`tables/${formattedKey}`).set(table);
+      await fbDb.ref(`tables/${formattedKey}`).set(clearedTable);
     } catch (e) {
       console.error("Erro ao liberar mesa no Firebase:", e);
     }
