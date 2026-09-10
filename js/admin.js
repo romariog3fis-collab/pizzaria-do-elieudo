@@ -118,7 +118,7 @@ function setupCloudAndBroadcastSync() {
     fbListenStoreSettings((settings) => {
       if (settings) {
         adminState.storeSettings = settings;
-        updateStoreHeaderButton();
+        updateStoreStatusUI();
       }
     });
   }
@@ -875,6 +875,8 @@ function updateStoreStatusUI() {
     btn.title = "A pizzaria está fechada! Clique para abrir a loja para pedidos";
   }
 }
+window.updateStoreStatusUI = updateStoreStatusUI;
+window.updateStoreHeaderButton = updateStoreStatusUI;
 
 // Alternar status aberto/fechado com um clique no botão do cabeçalho
 function toggleStoreStatus() {
@@ -2471,7 +2473,7 @@ async function confirmEndDay() {
       if (typeof fbSaveStoreSettings === "function") {
         fbSaveStoreSettings(adminState.storeSettings);
       }
-      updateStoreHeaderButton();
+      updateStoreStatusUI();
     }
 
     // 4. Limpar o Painel KDS para o próximo dia amanhecer 100% limpo
