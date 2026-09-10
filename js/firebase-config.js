@@ -245,26 +245,42 @@ function fbUpdateOrderStatus(orderId, newStatus) {
     }
   }
 
-  // 2. Se pertencer a uma mesa, sincroniza a rodada na mesa local e nuvem imediatamente
+  // 2. Se pertencer a uma mesa, sincroniza a rodada no Firebase RTDB e localmente imediatamente
   if (tableKey && roundNum) {
-    const tables = getLocalTables();
-    if (tables && tables[tableKey] && tables[tableKey].currentSession) {
-      const session = tables[tableKey].currentSession;
-      const roundIdx = roundNum - 1;
-      if (session.rounds && session.rounds[roundIdx]) {
-        session.rounds[roundIdx].status = newStatus;
-        saveLocalTables(tables);
-        if (isFirebaseReady && fbDb) {
-          fbDb.ref(`tables/${tableKey}/currentSession/rounds/${roundIdx}/status`).set(newStatus);
+    const roundIdx = roundNum - 1;
+
+    // Atualização local caso exista no navegador
+    try {
+      const tables = getLocalTables();
+      if (tables && tables[tableKey] && tables[tableKey].currentSession) {
+        const session = tables[tableKey].currentSession;
+        if (session.rounds && session.rounds[roundIdx]) {
+          session.rounds[roundIdx].status = newStatus;
+          saveLocalTables(tables);
         }
+      }
+    } catch (e) {}
+
+    // Atualização DIRETA no Firebase RTDB para o cliente receber ao vivo na comanda da mesa
+    if (isFirebaseReady && fbDb) {
+      try {
+        fbDb.ref(`tables/${tableKey}/currentSession/rounds/${roundIdx}/status`).set(newStatus).catch(err => {
+          console.warn("Aviso ao sincronizar rodada da mesa no Firebase:", err);
+        });
+      } catch (e) {
+        console.warn("Erro ao disparar set na rodada:", e);
       }
     }
   }
 
-  // 3. Atualiza no Firebase no nó de pedidos se conectado
+  // 3. Atualiza no Firebase no nó de pedidos se conectado (KDS / Rastreamento de Pedido)
   if (isFirebaseReady && fbDb) {
     const safeKey = orderId.replace("#", "ord_");
-    fbDb.ref(`orders/${safeKey}/status`).set(newStatus);
+    try {
+      fbDb.ref(`orders/${safeKey}/status`).set(newStatus).catch(err => {
+        console.warn("Aviso ao atualizar pedido no Firebase:", err);
+      });
+    } catch (e) {}
   }
 
   // 4. Notifica abas locais via BroadcastChannel
@@ -286,18 +302,25 @@ function fbUpdateTableRoundStatus(tableNum, roundNumber, newStatus) {
   const formattedKey = `mesa_${cleanNum < 10 ? '0' + cleanNum : cleanNum}`;
   const roundOrderId = `#M${cleanNum < 10 ? '0' + cleanNum : cleanNum}-${roundNumber < 10 ? '0' + roundNumber : roundNumber}`;
 
-  const tables = getLocalTables();
-  if (tables && tables[formattedKey] && tables[formattedKey].currentSession) {
-    const session = tables[formattedKey].currentSession;
+  // Atualização DIRETA no Firebase RTDB da rodada da mesa
+  if (isFirebaseReady && fbDb) {
     const roundIdx = roundNumber - 1;
-    if (session.rounds && session.rounds[roundIdx]) {
-      session.rounds[roundIdx].status = newStatus;
-      saveLocalTables(tables);
-      if (isFirebaseReady && fbDb) {
-        fbDb.ref(`tables/${formattedKey}/currentSession/rounds/${roundIdx}/status`).set(newStatus);
+    try {
+      fbDb.ref(`tables/${formattedKey}/currentSession/rounds/${roundIdx}/status`).set(newStatus).catch(() => {});
+    } catch (e) {}
+  }
+
+  try {
+    const tables = getLocalTables();
+    if (tables && tables[formattedKey] && tables[formattedKey].currentSession) {
+      const session = tables[formattedKey].currentSession;
+      const roundIdx = roundNumber - 1;
+      if (session.rounds && session.rounds[roundIdx]) {
+        session.rounds[roundIdx].status = newStatus;
+        saveLocalTables(tables);
       }
     }
-  }
+  } catch (e) {}
 
   return fbUpdateOrderStatus(roundOrderId, newStatus);
 }
@@ -841,9 +864,9 @@ function fbListenSingleTableWithToken(tableNum, token, callback) {
           checkAndDeliver({});
         }
       });
-    } else if (fbAttempts < 10) {
+    } else if (fbAttempts < 60) {
       fbAttempts++;
-      setTimeout(attachFirebaseListener, 300);
+      setTimeout(attachFirebaseListener, 350);
     }
   };
   attachFirebaseListener();

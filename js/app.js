@@ -1632,6 +1632,11 @@ function initClientTableTracking() {
   if (mesaParam) {
     window._autoOpenTableModalPending = true;
     try {
+      const prevMesa = sessionStorage.getItem("elieudo_client_mesa");
+      if (prevMesa && prevMesa !== mesaParam.trim()) {
+        sessionStorage.removeItem("elieudo_client_token");
+        tokenParam = tokenParam || null;
+      }
       sessionStorage.setItem("elieudo_client_mesa", mesaParam.trim());
       if (tokenParam) {
         sessionStorage.setItem("elieudo_client_token", tokenParam.trim());
@@ -1653,6 +1658,38 @@ function initClientTableTracking() {
   const listenFn = window.fbListenSingleTableWithToken || (typeof fbListenSingleTableWithToken === "function" ? fbListenSingleTableWithToken : null);
   if (listenFn) {
     listenFn(cleanMesa, tokenParam, onClientTableDataReceived);
+  }
+}
+
+// Mapa de listeners ativos nas ordens individuais das rodadas
+let clientTableRoundOrderListeners = {};
+
+function syncTableRoundsWithKdsOrders(table) {
+  if (!table || !table.currentSession || !Array.isArray(table.currentSession.rounds)) return;
+  if (!window.firebase || !firebase.apps || !firebase.apps.length) return;
+
+  try {
+    const db = firebase.database();
+    const rounds = table.currentSession.rounds;
+
+    rounds.forEach((round) => {
+      if (!round.orderId) return;
+      const cleanId = round.orderId.replace(/^#/, "").replace(/^ord_/, "").trim();
+      const safeKey = "ord_" + cleanId;
+
+      if (!clientTableRoundOrderListeners[safeKey]) {
+        clientTableRoundOrderListeners[safeKey] = true;
+        db.ref(`orders/${safeKey}/status`).on("value", (snap) => {
+          const newStatus = snap.val();
+          if (newStatus && round.status !== newStatus) {
+            round.status = newStatus;
+            renderClientTableDetails();
+          }
+        });
+      }
+    });
+  } catch (e) {
+    console.warn("Erro ao registrar listeners de rodadas:", e);
   }
 }
 
@@ -1690,6 +1727,9 @@ function onClientTableDataReceived(res) {
       btnTrack.classList.add("table-mode");
       btnTrack.title = "Toque para ver a comanda ao vivo da sua mesa";
     }
+
+    // Sincronização direta de alta velocidade com o KDS das rodadas
+    syncTableRoundsWithKdsOrders(res.table);
 
     // Atualiza conteúdo interno da comanda
     renderClientTableDetails();
