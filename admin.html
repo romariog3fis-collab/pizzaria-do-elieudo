@@ -92,7 +92,10 @@
         <span>🧑‍🍳 PDV Garçom</span>
       </a>
       <button class="btn-admin" id="btn-simulate-order" title="Gerar pedido de teste">➕ Simular Pedido</button>
-      <button class="btn-admin" id="btn-clear-orders" style="color: #ef4444;" title="Limpar lista">🗑️ Limpar</button>
+      <button class="btn-admin" id="btn-clear-orders" onclick="openClearOrdersModal()" style="color: #ef4444;" title="Limpar lista com senha">🗑️ Limpar</button>
+      <button class="btn-admin" id="btn-end-day" onclick="openEndDayModal()" style="background: linear-gradient(135deg, #4f46e5, #4338ca); border-color: #6366f1; color: #fff;" title="Encerrar o expediente, arquivar fechamento e deixar o painel limpo para amanhã">
+        <span>🌙 Finalizar o Dia</span>
+      </button>
       <a href="index.html" target="_blank" class="btn-admin" style="background: #c21a1a; border-color: #e53935;">
         <span>🌐 Ver Cardápio</span>
       </a>
@@ -283,6 +286,9 @@
           <p>Resumo financeiro das vendas, métodos de pagamento mais usados e produtos campeões.</p>
         </div>
         <div class="reports-top-actions">
+          <button class="btn-admin" onclick="openEndDayModal()" style="background: linear-gradient(135deg, #7c3aed, #6d28d9); border-color: #8b5cf6; color: #fff;" title="Salvar relatório do dia e limpar o painel para o próximo expediente">
+            <span>🌙 Finalizar o Dia</span>
+          </button>
           <button class="btn-admin" onclick="printCashClosingReceipt()" style="background: #2563eb; border-color: #3b82f6; color: #fff;" title="Imprimir fechamento em impressora térmica">
             <span>🧾 Imprimir Fechamento</span>
           </button>
@@ -360,6 +366,22 @@
               <!-- Injetado dinamicamente -->
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- Fechamentos de Expedientes Anteriores Arquivados -->
+      <div class="report-box" style="margin-top: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
+          <div>
+            <h3 class="report-box-title" style="margin-bottom: 2px;">📁 Histórico de Fechamentos Anteriores Arquivados</h3>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">Consulte os fechamentos de caixa de dias e expedientes passados.</p>
+          </div>
+          <button class="btn-admin" onclick="loadArchivedClosuresList()" style="font-size: 0.8rem; padding: 6px 12px;">
+            <span>🔄 Atualizar Histórico</span>
+          </button>
+        </div>
+        <div id="archived-closures-container">
+          <!-- Injetado via admin.js -->
         </div>
       </div>
 
@@ -690,6 +712,108 @@
         <button type="button" class="btn-admin" onclick="closeChangePinModal()">Cancelar</button>
         <button type="button" class="btn-admin btn-save-hours" onclick="saveNewAdminPin()">
           💾 Atualizar PIN
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Confirmação Segura para Limpar Pedidos com Senha/PIN -->
+  <div class="admin-modal-overlay" id="modal-confirm-clear-orders" style="display: none;">
+    <div class="admin-modal-box" style="max-width: 440px; text-align: center;">
+      <div style="font-size: 2.6rem; margin-bottom: 8px;">🗑️</div>
+      <h3 style="font-size: 1.3rem; margin-bottom: 6px; color: #ef4444;">Limpar Histórico de Pedidos</h3>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 18px; line-height: 1.4;">
+        Para evitar limpezas acidentais, digite seu <strong>PIN de acesso</strong> (a mesma senha de entrar no sistema):
+      </p>
+
+      <div style="margin-bottom: 14px;">
+        <input type="password" id="input-clear-pin" class="admin-form-input" maxlength="8"
+               placeholder="PIN de acesso (ex: 1234)" 
+               style="text-align: center; font-size: 1.4rem; letter-spacing: 8px; font-weight: bold; width: 100%; max-width: 220px; margin: 0 auto;"
+               onkeydown="if(event.key==='Enter') confirmClearOrdersWithPin()" />
+      </div>
+
+      <div id="clear-pin-feedback" style="display: none; padding: 8px 12px; border-radius: 8px; font-size: 0.82rem; font-weight: bold; margin-bottom: 14px; background: rgba(239, 68, 68, 0.2); color: #f87171;"></div>
+
+      <div class="admin-modal-footer" style="justify-content: center; gap: 12px;">
+        <button type="button" class="btn-admin" onclick="closeClearOrdersModal()">Cancelar</button>
+        <button type="button" class="btn-admin" style="background: #ef4444; border-color: #dc2626; color: #fff;" onclick="confirmClearOrdersWithPin()">
+          🗑️ Confirmar Limpeza
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Finalização do Dia / Fechamento de Caixa -->
+  <div class="admin-modal-overlay" id="modal-end-day" style="display: none;">
+    <div class="admin-modal-box" style="max-width: 520px;">
+      <div class="admin-modal-header">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 1.8rem;">🌙</span>
+          <div>
+            <h3>Finalizar Expediente do Dia</h3>
+            <span style="font-size: 0.8rem; color: var(--text-muted);">Arquive o fechamento e deixe o painel limpo para o próximo dia</span>
+          </div>
+        </div>
+        <button class="btn-close-modal" onclick="closeEndDayModal()">&times;</button>
+      </div>
+
+      <div class="admin-modal-body">
+        <!-- Resumo do Expediente de Hoje -->
+        <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 14px; margin-bottom: 16px;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.85rem; color: #cbd5e1;">
+            <span>Data do Expediente:</span>
+            <strong id="end-day-date-label">Hoje</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.85rem; color: #cbd5e1;">
+            <span>Total de Pedidos:</span>
+            <strong id="end-day-orders-count">0 pedidos</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.85rem; color: #cbd5e1;">
+            <span>Faturamento Consolidado:</span>
+            <strong style="color: #10b981; font-size: 1.15rem;" id="end-day-revenue">R$ 0,00</strong>
+          </div>
+          <div style="border-top: 1px dashed rgba(255,255,255,0.12); padding-top: 8px; font-size: 0.8rem; color: #94a3b8;" id="end-day-payments-breakdown">
+            <!-- Detalhamento PIX / Cartão / Dinheiro -->
+          </div>
+        </div>
+
+        <!-- Opções de Encerramento -->
+        <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px;">
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.85rem;">
+            <input type="checkbox" id="check-end-day-archive" checked />
+            <span>💾 <strong>Arquivar Fechamento no Histórico</strong> (salva resumo para consulta futura)</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.85rem;">
+            <input type="checkbox" id="check-end-day-clean" checked />
+            <span>🧹 <strong>Limpar Painel para Amanhã</strong> (zera pedidos do KDS para amanhecer limpo)</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.85rem;">
+            <input type="checkbox" id="check-end-day-close-store" checked />
+            <span>🔴 <strong>Fechar a Loja</strong> (muda status para Loja Fechada no cardápio online)</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.85rem;">
+            <input type="checkbox" id="check-end-day-print" />
+            <span>🧾 <strong>Imprimir Cupom de Fechamento</strong> (comprovante térmico 80mm)</span>
+          </label>
+        </div>
+
+        <!-- Validação de Senha/PIN -->
+        <div class="form-group-admin" style="margin-bottom: 0;">
+          <label for="input-end-day-pin">Digite seu PIN de acesso para confirmar:</label>
+          <input type="password" id="input-end-day-pin" class="admin-form-input" maxlength="8"
+                 placeholder="Digite o PIN de acesso (ex: 1234)" 
+                 style="text-align: center; font-size: 1.2rem; letter-spacing: 6px; font-weight: bold;"
+                 onkeydown="if(event.key==='Enter') confirmEndDay()" />
+        </div>
+
+        <div id="end-day-feedback" style="display: none; padding: 8px 12px; border-radius: 8px; font-size: 0.82rem; font-weight: bold; margin-top: 10px; background: rgba(239, 68, 68, 0.2); color: #f87171;"></div>
+      </div>
+
+      <div class="admin-modal-footer">
+        <button type="button" class="btn-admin" onclick="closeEndDayModal()">Cancelar</button>
+        <button type="button" class="btn-admin" id="btn-confirm-end-day" style="background: linear-gradient(135deg, #7c3aed, #6d28d9); border-color: #8b5cf6; color: #fff;" onclick="confirmEndDay()">
+          🌙 Confirmar Fechamento do Dia
         </button>
       </div>
     </div>

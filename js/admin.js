@@ -525,18 +525,7 @@ function setupAdminControls() {
   const btnClear = document.getElementById("btn-clear-orders");
   if (btnClear) {
     btnClear.onclick = () => {
-      if (confirm("Deseja limpar todos os pedidos do histórico?")) {
-        adminState.orders = [];
-        saveOrders();
-        if (typeof fbClearAllOrders === "function") {
-          fbClearAllOrders();
-        }
-        renderKanban();
-        updateMetrics();
-        if (adminState.activeTab === "reports") {
-          renderReports();
-        }
-      }
+      openClearOrdersModal();
     };
   }
 }
@@ -574,7 +563,7 @@ function setupTabNavigation() {
     { btnId: "tab-btn-tables", viewId: "view-tables", name: "tables", onOpen: renderAdminTables },
     { btnId: "tab-btn-stock", viewId: "view-stock", name: "stock", onOpen: renderStockManager },
     { btnId: "tab-btn-coupons", viewId: "view-coupons", name: "coupons", onOpen: renderCouponsList },
-    { btnId: "tab-btn-reports", viewId: "view-reports", name: "reports", onOpen: renderReports }
+    { btnId: "tab-btn-reports", viewId: "view-reports", name: "reports", onOpen: () => { renderReports(); loadArchivedClosuresList(); } }
   ];
 
   tabs.forEach(tab => {
@@ -2290,5 +2279,345 @@ function printAllTablesQRCodes() {
   window.print();
 }
 window.printAllTablesQRCodes = printAllTablesQRCodes;
+
+// ============================================================
+// FRENTE 6: SEGURANÇA NA LIMPEZA (PIN) E FINALIZAR EXPEDIENTE
+// ============================================================
+
+// 1. Limpeza de Pedidos com Senha/PIN do Admin
+function openClearOrdersModal() {
+  const modal = document.getElementById("modal-confirm-clear-orders");
+  const input = document.getElementById("input-clear-pin");
+  const fb = document.getElementById("clear-pin-feedback");
+  if (input) input.value = "";
+  if (fb) fb.style.display = "none";
+  if (modal) {
+    modal.style.display = "flex";
+    setTimeout(() => { if (input) input.focus(); }, 120);
+  }
+}
+window.openClearOrdersModal = openClearOrdersModal;
+
+function closeClearOrdersModal() {
+  const modal = document.getElementById("modal-confirm-clear-orders");
+  if (modal) modal.style.display = "none";
+}
+window.closeClearOrdersModal = closeClearOrdersModal;
+
+function confirmClearOrdersWithPin() {
+  const input = document.getElementById("input-clear-pin");
+  const fb = document.getElementById("clear-pin-feedback");
+  const entered = input ? input.value.trim() : "";
+
+  if (entered !== adminState.adminPin) {
+    if (fb) {
+      fb.style.display = "block";
+      fb.innerText = "❌ Senha/PIN incorreto! Limpeza cancelada por segurança.";
+    }
+    if (input) {
+      input.classList.add("shake-error");
+      setTimeout(() => input.classList.remove("shake-error"), 400);
+    }
+    return;
+  }
+
+  // Executa a limpeza segura
+  adminState.orders = [];
+  saveOrders();
+  if (typeof fbClearAllOrders === "function") {
+    fbClearAllOrders();
+  }
+  renderKanban();
+  updateMetrics();
+  if (adminState.activeTab === "reports") {
+    renderReports();
+  }
+
+  closeClearOrdersModal();
+  alert("✅ Todos os pedidos do painel foram limpos com sucesso!");
+}
+window.confirmClearOrdersWithPin = confirmClearOrdersWithPin;
+
+// 2. Finalizar o Dia / Fechamento de Caixa do Expediente
+let currentDaySummary = null;
+
+function openEndDayModal() {
+  const modal = document.getElementById("modal-end-day");
+  if (!modal) return;
+
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('pt-BR');
+  const dateKey = dateStr.replace(/\//g, "-");
+
+  // Filtra pedidos do expediente atual
+  const orders = adminState.orders || [];
+  let totalRev = 0;
+  let payTotals = { pix: 0, cartao: 0, dinheiro: 0 };
+  let payCounts = { pix: 0, cartao: 0, dinheiro: 0 };
+  let deliveryCount = 0;
+  let balcaoCount = 0;
+  let mesaCount = 0;
+
+  orders.forEach(o => {
+    const val = o.totalPrice !== undefined ? o.totalPrice : (o.subtotal || 0);
+    totalRev += val;
+    const pay = (o.paymentMethod || "").toLowerCase();
+    if (pay.includes("pix")) { payTotals.pix += val; payCounts.pix++; }
+    else if (pay.includes("cart") || pay.includes("crédito") || pay.includes("débito")) { payTotals.cartao += val; payCounts.cartao++; }
+    else { payTotals.dinheiro += val; payCounts.dinheiro++; }
+
+    if (o.deliveryType === "delivery") deliveryCount++;
+    else if (o.deliveryType === "mesa") mesaCount++;
+    else balcaoCount++;
+  });
+
+  currentDaySummary = {
+    dateStr: dateStr,
+    dateKey: dateKey,
+    closedAt: Date.now(),
+    closedTimeStr: now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+    totalOrders: orders.length,
+    totalRevenue: totalRev,
+    deliveryCount,
+    balcaoCount,
+    mesaCount,
+    paymentTotals: payTotals,
+    paymentCounts: payCounts,
+    orders: JSON.parse(JSON.stringify(orders))
+  };
+
+  const lblDate = document.getElementById("end-day-date-label");
+  const lblCount = document.getElementById("end-day-orders-count");
+  const lblRev = document.getElementById("end-day-revenue");
+  const divBreakdown = document.getElementById("end-day-payments-breakdown");
+  const inputPin = document.getElementById("input-end-day-pin");
+  const fb = document.getElementById("end-day-feedback");
+
+  if (lblDate) lblDate.innerText = `Hoje (${dateStr})`;
+  if (lblCount) lblCount.innerText = `${orders.length} pedido${orders.length === 1 ? '' : 's'}`;
+  if (lblRev) lblRev.innerText = formatBRL(totalRev);
+  if (divBreakdown) {
+    divBreakdown.innerHTML = `
+      <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+        <span>PIX (${payCounts.pix}):</span> <strong>${formatBRL(payTotals.pix)}</strong>
+      </div>
+      <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+        <span>Cartão (${payCounts.cartao}):</span> <strong>${formatBRL(payTotals.cartao)}</strong>
+      </div>
+      <div style="display: flex; justify-content: space-between;">
+        <span>Dinheiro (${payCounts.dinheiro}):</span> <strong>${formatBRL(payTotals.dinheiro)}</strong>
+      </div>
+    `;
+  }
+  if (inputPin) inputPin.value = "";
+  if (fb) fb.style.display = "none";
+
+  modal.style.display = "flex";
+  setTimeout(() => { if (inputPin) inputPin.focus(); }, 120);
+}
+window.openEndDayModal = openEndDayModal;
+
+function closeEndDayModal() {
+  const modal = document.getElementById("modal-end-day");
+  if (modal) modal.style.display = "none";
+}
+window.closeEndDayModal = closeEndDayModal;
+
+async function confirmEndDay() {
+  const inputPin = document.getElementById("input-end-day-pin");
+  const fb = document.getElementById("end-day-feedback");
+  const btn = document.getElementById("btn-confirm-end-day");
+  const enteredPin = inputPin ? inputPin.value.trim() : "";
+
+  if (enteredPin !== adminState.adminPin) {
+    if (fb) {
+      fb.style.display = "block";
+      fb.innerText = "❌ Senha/PIN incorreto! Finalização de expediente não autorizada.";
+    }
+    if (inputPin) {
+      inputPin.classList.add("shake-error");
+      setTimeout(() => inputPin.classList.remove("shake-error"), 400);
+    }
+    return;
+  }
+
+  const shouldArchive = document.getElementById("check-end-day-archive").checked;
+  const shouldClean = document.getElementById("check-end-day-clean").checked;
+  const shouldCloseStore = document.getElementById("check-end-day-close-store").checked;
+  const shouldPrint = document.getElementById("check-end-day-print").checked;
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<span>⏳ Encerrando dia e limpando painel...</span>`;
+  }
+
+  try {
+    // 1. Arquivar fechamento no histórico permanente
+    if (shouldArchive && currentDaySummary) {
+      if (typeof fbSaveDailyClosure === "function") {
+        await fbSaveDailyClosure(currentDaySummary);
+      }
+    }
+
+    // 2. Imprimir comprovante térmico se solicitado
+    if (shouldPrint) {
+      printCashClosingReceipt();
+    }
+
+    // 3. Fechar a Loja no cardápio online
+    if (shouldCloseStore) {
+      adminState.storeSettings.isOpen = false;
+      saveStoreSettings();
+      if (typeof fbSaveStoreSettings === "function") {
+        fbSaveStoreSettings(adminState.storeSettings);
+      }
+      updateStoreHeaderButton();
+    }
+
+    // 4. Limpar o Painel KDS para o próximo dia amanhecer 100% limpo
+    if (shouldClean) {
+      adminState.orders = [];
+      saveOrders();
+      if (typeof fbClearAllOrders === "function") {
+        await fbClearAllOrders();
+      }
+      renderKanban();
+      updateMetrics();
+      if (adminState.activeTab === "reports") {
+        renderReports();
+      }
+    }
+
+    closeEndDayModal();
+    loadArchivedClosuresList();
+    alert("🌙 Expediente finalizado com sucesso!\n\nO fechamento foi arquivado e o painel amanhecerá limpo e pronto para o próximo dia.");
+  } catch (err) {
+    console.error("Erro ao finalizar dia:", err);
+    alert("Erro ao finalizar dia: " + (err.message || err));
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = `<span>🌙 Confirmar Fechamento do Dia</span>`;
+    }
+  }
+}
+window.confirmEndDay = confirmEndDay;
+
+// 3. Listagem e Reimpressão de Fechamentos Anteriores
+async function loadArchivedClosuresList() {
+  const container = document.getElementById("archived-closures-container");
+  if (!container) return;
+
+  container.innerHTML = `<div style="text-align: center; color: var(--text-dim); padding: 14px;">Carregando fechamentos arquivados...</div>`;
+
+  let closures = [];
+  if (typeof fbGetDailyClosures === "function") {
+    closures = await fbGetDailyClosures();
+  } else {
+    try {
+      const raw = localStorage.getItem("elieudo_daily_closures");
+      if (raw) closures = JSON.parse(raw);
+    } catch (e) {}
+  }
+
+  if (!closures || closures.length === 0) {
+    container.innerHTML = `
+      <div style="text-align: center; color: var(--text-dim); padding: 18px; border: 1px dashed rgba(255,255,255,0.1); border-radius: 8px; font-size: 0.85rem;">
+        Nenhum fechamento diário arquivado ainda. Ao usar a opção <strong>"Finalizar o Dia"</strong>, os relatórios consolidados ficarão arquivados aqui.
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = `
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      ${closures.map((c) => {
+        const dStr = c.dateStr || c.dateKey;
+        const rev = formatBRL(c.totalRevenue || 0);
+        const count = c.totalOrders || (c.orders ? c.orders.length : 0);
+        const pixVal = formatBRL((c.paymentTotals && c.paymentTotals.pix) || 0);
+        const cardVal = formatBRL((c.paymentTotals && c.paymentTotals.cartao) || 0);
+        const cashVal = formatBRL((c.paymentTotals && c.paymentTotals.dinheiro) || 0);
+
+        return `
+          <div style="background: rgba(15, 23, 42, 0.4); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <div>
+              <div style="font-weight: bold; font-size: 0.95rem; color: #fff;">📅 Expediente: ${dStr}</div>
+              <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 2px;">
+                ${count} pedido${count === 1 ? '' : 's'} • Fechado às ${c.closedTimeStr || '--:--'} • PIX: ${pixVal} | Cartão: ${cardVal} | Dinheiro: ${cashVal}
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <span style="font-weight: 800; color: #10b981; font-size: 1.1rem;">${rev}</span>
+              <button class="btn-admin" onclick="printArchivedClosure('${c.dateKey}')" style="font-size: 0.75rem; padding: 6px 12px; background: #2563eb; border-color: #3b82f6; color: #fff;" title="Reimprimir cupom deste fechamento">
+                🧾 Reimprimir
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+window.loadArchivedClosuresList = loadArchivedClosuresList;
+
+async function printArchivedClosure(dateKey) {
+  let closures = [];
+  if (typeof fbGetDailyClosures === "function") {
+    closures = await fbGetDailyClosures();
+  }
+  const item = closures.find(c => c.dateKey === dateKey);
+  if (!item) {
+    alert("Fechamento não encontrado.");
+    return;
+  }
+
+  const thermalDiv = document.getElementById("admin-thermal-receipt");
+  if (!thermalDiv) return;
+
+  const payTotals = item.paymentTotals || { pix: 0, cartao: 0, dinheiro: 0 };
+  const payCounts = item.paymentCounts || { pix: 0, cartao: 0, dinheiro: 0 };
+
+  thermalDiv.innerHTML = `
+    <div style="font-family: monospace; font-size: 12px; line-height: 1.4; width: 280px; margin: 0 auto; color: #000; padding: 10px;">
+      <div style="text-align: center; font-weight: bold; font-size: 14px;">PIZZARIA DO ELIEUDO</div>
+      <div style="text-align: center; font-size: 11px;">REIMPRESSÃO - FECHAMENTO DE CAIXA</div>
+      <div style="text-align: center; font-size: 10px; margin-bottom: 6px;">Expediente: ${item.dateStr} (Fechado às ${item.closedTimeStr || ''})</div>
+      <div style="border-top: 1px dashed #000; margin: 6px 0;"></div>
+      
+      <div><strong>Total de Pedidos:</strong> ${item.totalOrders || 0}</div>
+      <div><strong>Delivery:</strong> ${item.deliveryCount || 0} | <strong>Balcão:</strong> ${item.balcaoCount || 0} | <strong>Salão/Mesas:</strong> ${item.mesaCount || 0}</div>
+      <div style="border-top: 1px dashed #000; margin: 6px 0;"></div>
+
+      <div style="font-weight: bold; margin-bottom: 4px;">FORMAS DE PAGAMENTO:</div>
+      <div style="display: flex; justify-content: space-between;">
+        <span>PIX (${payCounts.pix || 0}):</span>
+        <span>${formatBRL(payTotals.pix || 0)}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between;">
+        <span>Cartão (${payCounts.cartao || 0}):</span>
+        <span>${formatBRL(payTotals.cartao || 0)}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between;">
+        <span>Dinheiro (${payCounts.dinheiro || 0}):</span>
+        <span>${formatBRL(payTotals.dinheiro || 0)}</span>
+      </div>
+
+      <div style="border-top: 1px dashed #000; margin: 6px 0;"></div>
+      <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: bold; margin-top: 4px;">
+        <span>FATURAMENTO TOTAL:</span>
+        <span>${formatBRL(item.totalRevenue || 0)}</span>
+      </div>
+
+      <div style="border-top: 1px dashed #000; margin: 12px 0 20px;"></div>
+      <div style="text-align: center; margin-top: 25px; border-top: 1px solid #000; padding-top: 4px; font-size: 11px;">
+        Assinatura do Responsável
+      </div>
+    </div>
+  `;
+
+  window.print();
+}
+window.printArchivedClosure = printArchivedClosure;
 
 

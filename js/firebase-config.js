@@ -1197,6 +1197,60 @@ async function fbCloseTable(tableNum, { paymentMethod = "Dinheiro", discount = 0
   return { success: true, finalRecord: finalOrderRecord };
 }
 
+/**
+ * Salvar Fechamento de Caixa / Arquivamento do Dia
+ */
+async function fbSaveDailyClosure(closureData) {
+  if (!closureData || !closureData.dateStr) return false;
+  const dateKey = (closureData.dateStr || "").replace(/\//g, "-");
+
+  // 1. Salva no localStorage
+  try {
+    const raw = localStorage.getItem("elieudo_daily_closures");
+    const list = raw ? JSON.parse(raw) : [];
+    const filtered = list.filter(c => c.dateKey !== dateKey);
+    filtered.unshift({ ...closureData, dateKey, savedAt: Date.now() });
+    localStorage.setItem("elieudo_daily_closures", JSON.stringify(filtered));
+  } catch (e) {}
+
+  // 2. Salva no Firebase RTDB
+  if (isFirebaseReady && fbDb) {
+    try {
+      await fbDb.ref(`daily_closures/${dateKey}`).set({
+        ...closureData,
+        dateKey,
+        savedAt: Date.now()
+      });
+    } catch (e) {
+      console.warn("Erro ao salvar fechamento diário no Firebase:", e);
+    }
+  }
+  return true;
+}
+
+/**
+ * Obter Histórico de Fechamentos Diários Arquivados
+ */
+async function fbGetDailyClosures() {
+  let list = [];
+  try {
+    const raw = localStorage.getItem("elieudo_daily_closures");
+    if (raw) list = JSON.parse(raw);
+  } catch (e) {}
+
+  if (isFirebaseReady && fbDb) {
+    try {
+      const snap = await fbDb.ref("daily_closures").once("value");
+      const val = snap.val();
+      if (val) {
+        list = Object.values(val).sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
+        localStorage.setItem("elieudo_daily_closures", JSON.stringify(list));
+      }
+    } catch (e) {}
+  }
+  return list;
+}
+
 // Exportações Globais no Window
 if (typeof window !== "undefined") {
   window.fbListenSingleTableWithToken = fbListenSingleTableWithToken;
@@ -1215,5 +1269,7 @@ if (typeof window !== "undefined") {
   window.fbUpdateTableRoundStatus = fbUpdateTableRoundStatus;
   window.getLocalTables = getLocalTables;
   window.saveLocalTables = saveLocalTables;
+  window.fbSaveDailyClosure = fbSaveDailyClosure;
+  window.fbGetDailyClosures = fbGetDailyClosures;
 }
 
