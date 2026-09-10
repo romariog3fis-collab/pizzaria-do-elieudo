@@ -133,6 +133,15 @@ d:\Antigravity\Pizzaria elieudo\
 * **Causa:** O sistema estava usando a URL do ambiente local (`http://localhost:3000/...`). Smartphones não conseguem acessar o `localhost` do computador do garçom e muitos aplicativos de câmera tratam endereços sem domínio público como texto puro.
 * **Solução:** A função `getCustomerBaseUrl()` agora gera a URL pública segura oficial (`https://romariog3fis-collab.github.io/pizzaria-do-elieudo/index.html?mesa=X&token=Y`) com protocolo HTTPS. Qualquer câmera de smartphone (Android, iOS, Samsung, Xiaomi) identifica instantaneamente como link web clicável e abre o cardápio conectado em tempo real ao Firebase.
 
+### 3. Abertura Automática da Comanda ao Escanear QR Code da Mesa
+* **Problema:** Ao escanear o QR Code da mesa com a câmera do celular, a página do cardápio abria, mas o modal da comanda não aparecia automaticamente. O cliente via um botão "Acompanhar Pedido" no cabeçalho e, ao clicar nele, o sistema abria uma tela pedindo para digitar o código de rastreamento do pedido (ex: 1264), gerando frustração.
+* **Causa:** `onClientTableDataReceived()` em `js/app.js` apenas exibia a barra superior fixa (`topBar.style.display = "flex"`), sem invocar `openClientTableModal()`. Além disso, o botão de rastreamento do cabeçalho chamava indiscriminadamente `openOrderTrackingModal()`, que buscava pedidos de delivery em vez da comanda da mesa conectada.
+* **Solução:**
+  - **Abertura Imediata:** Ao detectar `?mesa=X` na URL (ao ler o QR Code), o sistema define a flag `_autoOpenTableModalPending` e abre instantaneamente o modal `client-table-modal` com extrato de rodadas, status no forno, total da conta e botões de garçom/conta.
+  - **Handler Inteligente (`handleHeaderTrackClick`):** Se o cliente fechar o modal para ver o cardápio e depois tocar no botão do cabeçalho, o sistema identifica se ele está em uma mesa ativa e reabre a comanda diretamente (sem pedir código).
+  - **Identificação Visual Dinâmica:** O botão do cabeçalho agora atualiza para `🍽️ Mesa XX • Ver Comanda` com brilho esmeralda (`.table-mode`).
+  - **Vínculo Flexível:** Caso o cliente escaneie uma placa fixa da mesa (`?mesa=X`) sem token prévio, o Firebase autoriza automaticamente se a mesa estiver aberta no salão e memoriza o token da sessão. Se a mesa estiver fechada, exibe tela elegante convidando a chamar o garçom.
+
 ---
 
 ## 🔧 5. Roteiro de Profissionalização & Próximos Passos

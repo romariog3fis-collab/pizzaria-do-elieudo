@@ -725,45 +725,70 @@ function fbListenTables(callback) {
  * Escuta em tempo real uma mesa específica validando o token do cliente (Comanda Privada do Cliente)
  */
 function fbListenSingleTableWithToken(tableNum, token, callback) {
-  const formattedKey = typeof tableNum === "number" 
-    ? `mesa_${tableNum < 10 ? '0' + tableNum : tableNum}`
-    : (tableNum.startsWith("mesa_") ? tableNum : `mesa_${parseInt(tableNum) < 10 ? '0' + parseInt(tableNum) : tableNum}`);
+  const cleanNum = typeof tableNum === "number" 
+    ? tableNum 
+    : (parseInt(String(tableNum).replace(/\D/g, ""), 10) || 1);
+  const formattedKey = `mesa_${cleanNum < 10 ? '0' + cleanNum : cleanNum}`;
 
   const checkAndDeliver = (tables) => {
     if (!tables || !tables[formattedKey]) {
-      if (typeof callback === "function") callback({ authorized: false, error: "not_found" });
+      if (typeof callback === "function") callback({ authorized: false, error: "not_found", tableNum: cleanNum });
       return;
     }
     const table = tables[formattedKey];
     if (table.status === "livre" || !table.currentSession) {
-      if (typeof callback === "function") callback({ authorized: false, error: "closed", table });
+      if (typeof callback === "function") callback({ authorized: false, error: "closed", table, tableNum: cleanNum });
       return;
     }
-    // Validação estrita do token privado
-    if (String(table.currentSession.token).toUpperCase() === String(token).toUpperCase()) {
-      if (typeof callback === "function") callback({ authorized: true, table });
+    
+    // Se o token foi fornecido na URL/sessão, valida.
+    // Se o cliente escaneou a placa física da mesa (?mesa=X) sem token e a mesa está aberta com sessão ativa, vincula automaticamente!
+    const cleanToken = token ? String(token).trim().toUpperCase() : "";
+    const sessionToken = String(table.currentSession.token || "").trim().toUpperCase();
+
+    if (!cleanToken || cleanToken === sessionToken) {
+      if (typeof callback === "function") callback({ authorized: true, table, tableNum: cleanNum, sessionToken });
     } else {
-      if (typeof callback === "function") callback({ authorized: false, error: "invalid_token" });
+      if (typeof callback === "function") callback({ authorized: false, error: "invalid_token", table, tableNum: cleanNum });
     }
   };
 
-  // Verificação inicial local
+  // 1. Verificação inicial local
   checkAndDeliver(getLocalTables());
 
-  // Ouvinte contínuo no Firebase
-  if (isFirebaseReady && fbDb) {
-    fbDb.ref(`tables/${formattedKey}`).on("value", (snapshot) => {
-      const val = snapshot.val();
-      if (val) {
-        const fullLocal = getLocalTables();
-        fullLocal[formattedKey] = val;
-        saveLocalTables(fullLocal);
-        checkAndDeliver({ [formattedKey]: val });
-      } else {
-        checkAndDeliver({});
-      }
-    });
+  // 2. Ouvinte de sincronização entre abas
+  if (window.BroadcastChannel) {
+    try {
+      const bc = new BroadcastChannel("elieudo_orders_bus");
+      bc.onmessage = (event) => {
+        if (event.data && event.data.type === "TABLES_UPDATED" && event.data.tables) {
+          checkAndDeliver(event.data.tables);
+        }
+      };
+    } catch (e) {}
   }
+
+  // 3. Ouvinte contínuo no Firebase com retry se ainda estiver conectando
+  let fbAttempts = 0;
+  const attachFirebaseListener = () => {
+    if (isFirebaseReady && fbDb) {
+      fbDb.ref(`tables/${formattedKey}`).on("value", (snapshot) => {
+        const val = snapshot.val();
+        if (val) {
+          const fullLocal = getLocalTables();
+          fullLocal[formattedKey] = val;
+          saveLocalTables(fullLocal);
+          checkAndDeliver({ [formattedKey]: val });
+        } else {
+          checkAndDeliver({});
+        }
+      });
+    } else if (fbAttempts < 10) {
+      fbAttempts++;
+      setTimeout(attachFirebaseListener, 300);
+    }
+  };
+  attachFirebaseListener();
 }
 
 /**
@@ -1025,5 +1050,24 @@ async function fbCloseTable(tableNum, { paymentMethod = "Dinheiro", discount = 0
   }
 
   return { success: true, finalRecord: finalOrderRecord };
+}
+
+// Exportações Globais no Window
+if (typeof window !== "undefined") {
+  window.fbListenSingleTableWithToken = fbListenSingleTableWithToken;
+  window.fbOpenTable = fbOpenTable;
+  window.fbCloseTable = fbCloseTable;
+  window.fbCallWaiter = fbCallWaiter;
+  window.fbRequestBill = fbRequestBill;
+  window.fbAddRoundToTable = fbAddRoundToTable;
+  window.fbListenTables = fbListenTables;
+  window.fbSaveOrder = fbSaveOrder;
+  window.fbListenSingleOrder = fbListenSingleOrder;
+  window.fbGetOrderById = fbGetOrderById;
+  window.fbListenItemImages = fbListenItemImages;
+  window.fbSaveItemImage = fbSaveItemImage;
+  window.fbIsConnected = fbIsConnected;
+  window.getLocalTables = getLocalTables;
+  window.saveLocalTables = saveLocalTables;
 }
 

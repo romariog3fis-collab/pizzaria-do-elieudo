@@ -1229,10 +1229,14 @@ function initOrderTracking() {
   const orderParam = params.get("pedido") || params.get("tracking") || params.get("order");
 
   if (orderParam) {
+    const cleanId = orderParam.replace(/^#/, "").replace(/^ord_/, "").trim();
+    try {
+      localStorage.setItem("elieudo_last_order_id", "#" + cleanId);
+    } catch (e) {}
     // Abre direto o modal com o pedido especificado
     setTimeout(() => {
-      openOrderTrackingModal(orderParam);
-    }, 400);
+      openOrderTrackingModal(cleanId);
+    }, 150);
   } else {
     // Checa se há pedido ativo salvo para exibir a barra flutuante
     checkActiveOrderBanner();
@@ -1617,17 +1621,21 @@ window.checkActiveOrderBanner = checkActiveOrderBanner;
 // ========================================================
 
 appState.activeClientTable = null;
+window._autoOpenTableModalPending = false;
 
 function initClientTableTracking() {
   const urlParams = new URLSearchParams(window.location.search);
   let mesaParam = urlParams.get("mesa");
   let tokenParam = urlParams.get("token");
 
-  // Se vierem na URL, salva na sessão
-  if (mesaParam && tokenParam) {
+  // Se veio parâmetro mesa na URL, o cliente acabou de escanear o QR Code!
+  if (mesaParam) {
+    window._autoOpenTableModalPending = true;
     try {
       sessionStorage.setItem("elieudo_client_mesa", mesaParam.trim());
-      sessionStorage.setItem("elieudo_client_token", tokenParam.trim());
+      if (tokenParam) {
+        sessionStorage.setItem("elieudo_client_token", tokenParam.trim());
+      }
     } catch (e) {}
   } else {
     // Se não veio na URL, tenta recuperar da sessão ativa nesta aba
@@ -1637,63 +1645,166 @@ function initClientTableTracking() {
     } catch (e) {}
   }
 
-  if (!mesaParam || !tokenParam) return;
+  if (!mesaParam) return;
 
   const cleanMesa = parseInt(mesaParam, 10);
   if (isNaN(cleanMesa) || cleanMesa <= 0) return;
 
-  if (typeof fbListenSingleTableWithToken === "function") {
-    fbListenSingleTableWithToken(cleanMesa, tokenParam, onClientTableDataReceived);
+  const listenFn = window.fbListenSingleTableWithToken || (typeof fbListenSingleTableWithToken === "function" ? fbListenSingleTableWithToken : null);
+  if (listenFn) {
+    listenFn(cleanMesa, tokenParam, onClientTableDataReceived);
   }
 }
 
 function onClientTableDataReceived(res) {
   const topBar = document.getElementById("table-client-top-bar");
   const modal = document.getElementById("client-table-modal");
+  const btnTrack = document.getElementById("btn-header-track");
 
   if (res && res.authorized && res.table && res.table.currentSession) {
     appState.activeClientTable = res.table;
 
+    // Salva token da sessão caso tenha vindo na resposta
+    if (res.sessionToken) {
+      try {
+        sessionStorage.setItem("elieudo_client_token", res.sessionToken);
+      } catch (e) {}
+    }
+
+    const num = res.table.number;
+    const numStr = num < 10 ? '0' + num : num;
+    const total = res.table.currentSession.total || res.table.currentSession.subtotal || 0;
+
     // Atualizar Barra Superior Fixa
     if (topBar) {
-      const num = res.table.number;
-      const total = res.table.currentSession.total || res.table.currentSession.subtotal || 0;
-      
       const numEl = document.getElementById("table-bar-num");
       const subEl = document.getElementById("table-bar-parcial");
-      if (numEl) numEl.innerText = `🍽️ Mesa ${num < 10 ? '0' + num : num}`;
+      if (numEl) numEl.innerText = `🍽️ Mesa ${numStr}`;
       if (subEl) subEl.innerText = `Parcial: ${formatMoney(total)}`;
-
       topBar.style.display = "flex";
     }
 
-    // Se o modal estiver aberto, atualiza o conteúdo
-    if (modal && modal.classList.contains("active")) {
-      renderClientTableDetails();
+    // Atualizar Botão do Cabeçalho para refletir a mesa conectada
+    if (btnTrack) {
+      btnTrack.innerHTML = `<span>🍽️ Mesa ${numStr} • Ver Comanda</span>`;
+      btnTrack.classList.add("table-mode");
+      btnTrack.title = "Toque para ver a comanda ao vivo da sua mesa";
     }
-  } else {
-    // Acesso não autorizado, token inválido ou mesa encerrada
+
+    // Atualiza conteúdo interno da comanda
+    renderClientTableDetails();
+
+    // Se acabou de escanear o QR Code, ABRE AUTOMATICAMENTE NA HORA!
+    if (window._autoOpenTableModalPending) {
+      window._autoOpenTableModalPending = false;
+      setTimeout(() => {
+        openClientTableModal();
+      }, 100);
+    }
+  } else if (res && res.error === "closed") {
+    // Mesa fechada ou ainda não aberta no salão
+    const num = res.tableNum || (res.table && res.table.number);
+    if (window._autoOpenTableModalPending && num) {
+      window._autoOpenTableModalPending = false;
+      showTableWaitingOpenModal(num);
+    }
+  } else if (res && res.error === "invalid_token") {
     if (topBar) topBar.style.display = "none";
     if (modal) modal.classList.remove("active");
-
-    if (res && res.error === "closed") {
-      try {
-        sessionStorage.removeItem("elieudo_client_mesa");
-        sessionStorage.removeItem("elieudo_client_token");
-      } catch (e) {}
-      alert("Sua conta foi encerrada com sucesso pelo atendimento. Agradecemos sua visita e bom apetite!");
-    } else if (res && res.error === "invalid_token") {
-      try {
-        sessionStorage.removeItem("elieudo_client_mesa");
-        sessionStorage.removeItem("elieudo_client_token");
-      } catch (e) {}
-      alert("Esta comanda não está mais ativa ou o QR Code expirou. Por favor, solicite um novo QR Code ao garçom.");
-    }
+    try {
+      sessionStorage.removeItem("elieudo_client_mesa");
+      sessionStorage.removeItem("elieudo_client_token");
+    } catch (e) {}
+    alert("Esta comanda não está mais ativa ou o QR Code expirou. Por favor, solicite um novo QR Code ao garçom.");
   }
 }
 
+function showTableWaitingOpenModal(tableNum) {
+  const modal = document.getElementById("client-table-modal");
+  if (!modal) return;
+
+  const cleanNum = parseInt(tableNum, 10) || 1;
+  const numStr = cleanNum < 10 ? '0' + cleanNum : cleanNum;
+
+  const titleEl = document.getElementById("client-modal-title");
+  const subEl = document.getElementById("client-modal-subtitle");
+  const totalEl = document.getElementById("client-bill-total");
+  const roundsContainer = document.getElementById("client-rounds-container");
+
+  if (titleEl) titleEl.innerText = `Mesa ${numStr}`;
+  if (subEl) subEl.innerText = `Aguardando abertura no salão`;
+  if (totalEl) totalEl.innerText = `R$ 0,00`;
+
+  if (roundsContainer) {
+    roundsContainer.innerHTML = `
+      <div style="background: rgba(245, 158, 11, 0.08); border: 1px dashed rgba(245, 158, 11, 0.35); border-radius: 12px; padding: 22px 16px; text-align: center;">
+        <div style="font-size: 2.2rem; margin-bottom: 8px;">🍽️</div>
+        <h3 style="font-size: 1rem; color: #fbbf24; margin: 0 0 6px 0;">Mesa ${numStr} • Aguardando Atendimento</h3>
+        <p style="font-size: 0.82rem; color: #cbd5e1; margin: 0 0 16px 0; line-height: 1.4;">
+          Esta mesa ainda não foi aberta no salão. Peça ao garçom para iniciar seu atendimento ou toque no botão abaixo!
+        </p>
+        <button type="button" class="btn-client-call" style="width: 100%; max-width: 260px; margin: 0 auto; display: inline-flex; justify-content: center; align-items: center; gap: 8px; padding: 10px 16px;" onclick="clientCallWaiterQuick(${cleanNum})">
+          <span>🙋‍♂️ Chamar Garçom para Abrir Mesa</span>
+        </button>
+      </div>
+    `;
+  }
+
+  modal.classList.add("active");
+}
+window.showTableWaitingOpenModal = showTableWaitingOpenModal;
+
+async function clientCallWaiterQuick(num) {
+  try {
+    if (typeof fbCallWaiter === "function") {
+      await fbCallWaiter(num, true);
+    }
+    alert(`🙋‍♂️ Garçom chamado para a Mesa ${num < 10 ? '0' + num : num}! O atendente já virá até sua mesa.`);
+  } catch (e) {
+    console.error(e);
+  }
+}
+window.clientCallWaiterQuick = clientCallWaiterQuick;
+
+// Ação centralizada inteligente do botão de rastreamento do cabeçalho
+function handleHeaderTrackClick() {
+  // 1. Se estiver conectado a uma mesa ativa do salão
+  if (appState.activeClientTable && appState.activeClientTable.currentSession) {
+    openClientTableModal();
+    return;
+  }
+
+  // 2. Se houver número de mesa salva na sessão
+  const savedMesa = sessionStorage.getItem("elieudo_client_mesa");
+  if (savedMesa) {
+    if (appState.activeClientTable && appState.activeClientTable.currentSession) {
+      openClientTableModal();
+      return;
+    } else {
+      showTableWaitingOpenModal(savedMesa);
+      return;
+    }
+  }
+
+  // 3. Se houver pedido recente de delivery/balcão salvo
+  const lastOrderId = localStorage.getItem("elieudo_last_order_id");
+  if (lastOrderId) {
+    openOrderTrackingModal(lastOrderId);
+    return;
+  }
+
+  // 4. Se não tem nada ativo, abre busca normal para digitar o código
+  openOrderTrackingModal();
+}
+window.handleHeaderTrackClick = handleHeaderTrackClick;
+
 function openClientTableModal() {
   if (!appState.activeClientTable) {
+    const savedMesa = sessionStorage.getItem("elieudo_client_mesa");
+    if (savedMesa) {
+      showTableWaitingOpenModal(savedMesa);
+      return;
+    }
     alert("Nenhuma mesa conectada no momento.");
     return;
   }

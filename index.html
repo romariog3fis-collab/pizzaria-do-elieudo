@@ -44,7 +44,7 @@
 
       <!-- Ações Rápidas do Header -->
       <div class="header-actions-row">
-        <button type="button" class="btn-header-track" id="btn-header-track" onclick="openOrderTrackingModal()">
+        <button type="button" class="btn-header-track" id="btn-header-track" onclick="handleHeaderTrackClick()">
           <span>🛵 Acompanhar Pedido</span>
         </button>
       </div>
@@ -52,7 +52,7 @@
   </header>
 
   <!-- Barra Flutuante de Pedido Ativo / Em Andamento -->
-  <div id="active-order-floating-banner" class="active-order-banner" style="display: none;" onclick="openOrderTrackingModal()">
+  <div id="active-order-floating-banner" class="active-order-banner" style="display: none;" onclick="handleHeaderTrackClick()">
     <div class="active-order-content">
       <div class="active-order-status-pulse">
         <span class="active-order-icon" id="floating-banner-icon">🔥</span>

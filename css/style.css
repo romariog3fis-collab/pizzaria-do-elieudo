@@ -1246,6 +1246,18 @@ body {
   box-shadow: 0 4px 14px rgba(245, 158, 11, 0.25);
 }
 
+.btn-header-track.table-mode {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.5);
+  color: #34d399;
+}
+
+.btn-header-track.table-mode:hover {
+  background: rgba(16, 185, 129, 0.28);
+  border-color: #34d399;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+}
+
 /* Barra Flutuante de Pedido Ativo / Em Andamento */
 .active-order-banner {
   background: linear-gradient(90deg, #1e293b, #0f172a);
