@@ -1729,11 +1729,13 @@ function showTableWaitingOpenModal(tableNum) {
   const titleEl = document.getElementById("client-modal-title");
   const subEl = document.getElementById("client-modal-subtitle");
   const totalEl = document.getElementById("client-bill-total");
+  const progressContainer = document.getElementById("client-table-order-progress");
   const roundsContainer = document.getElementById("client-rounds-container");
 
   if (titleEl) titleEl.innerText = `Mesa ${numStr}`;
   if (subEl) subEl.innerText = `Aguardando abertura no salão`;
   if (totalEl) totalEl.innerText = `R$ 0,00`;
+  if (progressContainer) progressContainer.innerHTML = "";
 
   if (roundsContainer) {
     roundsContainer.innerHTML = `
@@ -1830,6 +1832,7 @@ function renderClientTableDetails() {
   const titleEl = document.getElementById("client-modal-title");
   const subEl = document.getElementById("client-modal-subtitle");
   const totalEl = document.getElementById("client-bill-total");
+  const progressContainer = document.getElementById("client-table-order-progress");
   const roundsContainer = document.getElementById("client-rounds-container");
 
   if (titleEl) titleEl.innerText = `Mesa ${num < 10 ? '0' + num : num} • ${session.customerName || 'Cliente'}`;
@@ -1842,10 +1845,125 @@ function renderClientTableDetails() {
   if (callMsg) callMsg.style.display = table.callWaiter ? "block" : "none";
   if (billMsg) billMsg.style.display = table.status === "aguardando_conta" ? "block" : "none";
 
+  const rounds = session.rounds || [];
+
+  // ========================================================
+  // RENDERIZAÇÃO DO PROGRESSO DO PEDIDO (STEPPER VISUAL)
+  // ========================================================
+  if (progressContainer) {
+    if (rounds.length === 0) {
+      progressContainer.innerHTML = `
+        <div class="tracking-current-status-card status-pendente" style="margin-bottom: 14px;">
+          <div class="tracking-status-icon-wrap">
+            <span class="tracking-status-large-icon">🍽️</span>
+          </div>
+          <div class="tracking-status-info">
+            <span class="tracking-step-indicator">MESA ABERTA NO SALÃO</span>
+            <h3 class="tracking-status-title">Aguardando Seu Pedido</h3>
+            <p class="tracking-status-desc">O garçom já virá à sua mesa anotar seus pedidos ou você pode escolher pelo cardápio.</p>
+          </div>
+        </div>
+      `;
+    } else {
+      // Determina o status geral prioritário entre as rodadas
+      let overallStatus = "pendente";
+      if (rounds.some(r => r.status === "preparando")) {
+        overallStatus = "preparando";
+      } else if (rounds.some(r => r.status === "entrega")) {
+        overallStatus = "entrega";
+      } else if (rounds.some(r => r.status === "pendente")) {
+        overallStatus = "pendente";
+      } else if (rounds.every(r => r.status === "finalizado")) {
+        overallStatus = "finalizado";
+      }
+
+      let activeStepNum = 1;
+      let statusBadge = {
+        title: "Pedido Recebido na Cozinha",
+        desc: "Seus itens foram recebidos pela equipe e aguardam entrada no forno a lenha.",
+        icon: "📋",
+        colorClass: "status-pendente"
+      };
+
+      if (overallStatus === "preparando") {
+        activeStepNum = 2;
+        statusBadge = {
+          title: "No Forno a Lenha!",
+          desc: "O pizzaiolo já está montando e assando suas pizzas no forno a lenha bem quentinho!",
+          icon: "🔥",
+          colorClass: "status-preparando"
+        };
+      } else if (overallStatus === "entrega") {
+        activeStepNum = 3;
+        statusBadge = {
+          title: "Sendo Servido na Mesa!",
+          desc: "Seus pedidos saíram do forno e o atendente está trazendo agora para a sua mesa!",
+          icon: "🍽️",
+          colorClass: "status-entrega"
+        };
+      } else if (overallStatus === "finalizado") {
+        activeStepNum = 4;
+        statusBadge = {
+          title: "Itens Servidos na Mesa!",
+          desc: "Todos os seus pedidos foram servidos. Bom apetite e aproveite cada pedaço!",
+          icon: "✅",
+          colorClass: "status-finalizado"
+        };
+      }
+
+      const progressPercent = Math.min(100, Math.round(((activeStepNum - 1) / 3) * 100));
+
+      progressContainer.innerHTML = `
+        <!-- Card de Status Dinâmico com Ícone Grande e Animação -->
+        <div class="tracking-current-status-card ${statusBadge.colorClass}" style="margin-bottom: 14px;">
+          <div class="tracking-status-icon-wrap">
+            <span class="tracking-status-large-icon">${statusBadge.icon}</span>
+          </div>
+          <div class="tracking-status-info">
+            <span class="tracking-step-indicator">PROGRESSO DO PEDIDO • ETAPA ${activeStepNum} DE 4</span>
+            <h3 class="tracking-status-title">${statusBadge.title}</h3>
+            <p class="tracking-status-desc">${statusBadge.desc}</p>
+          </div>
+        </div>
+
+        <!-- Stepper Visual com Linha de Progresso (4 Etapas) -->
+        <div class="tracking-stepper-box" style="margin-bottom: 16px;">
+          <div class="tracking-stepper-line-bg">
+            <div class="tracking-stepper-line-fill" style="width: ${progressPercent}%;"></div>
+          </div>
+          <div class="tracking-steps-row">
+            <!-- Etapa 1: Recebido -->
+            <div class="tracking-step-node ${activeStepNum >= 1 ? 'completed' : ''} ${activeStepNum === 1 ? 'current' : ''}">
+              <div class="step-circle">${activeStepNum > 1 ? '✓' : '1'}</div>
+              <span class="step-label">Recebido</span>
+            </div>
+            <!-- Etapa 2: No Forno -->
+            <div class="tracking-step-node ${activeStepNum >= 2 ? 'completed' : ''} ${activeStepNum === 2 ? 'current' : ''}">
+              <div class="step-circle">${activeStepNum > 2 ? '✓' : '2'}</div>
+              <span class="step-label">No Forno</span>
+            </div>
+            <!-- Etapa 3: Servindo -->
+            <div class="tracking-step-node ${activeStepNum >= 3 ? 'completed' : ''} ${activeStepNum === 3 ? 'current' : ''}">
+              <div class="step-circle">${activeStepNum > 3 ? '✓' : '3'}</div>
+              <span class="step-label">Servindo</span>
+            </div>
+            <!-- Etapa 4: Entregue -->
+            <div class="tracking-step-node ${activeStepNum >= 4 ? 'completed' : ''} ${activeStepNum === 4 ? 'current' : ''}">
+              <div class="step-circle">${activeStepNum >= 4 ? '✓' : '4'}</div>
+              <span class="step-label">Entregue</span>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+  }
+
+  // ========================================================
+  // RENDERIZAÇÃO DO EXTRATO DE RODADAS
+  // ========================================================
   if (!roundsContainer) return;
   roundsContainer.innerHTML = "";
 
-  const rounds = session.rounds || [];
   if (rounds.length === 0) {
     roundsContainer.innerHTML = `
       <div style="background: #11151e; border: 1px dashed var(--border-subtle); border-radius: 12px; padding: 20px; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
@@ -1855,27 +1973,37 @@ function renderClientTableDetails() {
     return;
   }
 
-  rounds.forEach(r => {
+  rounds.forEach((r, idx) => {
     const card = document.createElement("div");
     card.className = "client-round-card";
 
-    let statusText = "📋 Recebido na Cozinha";
-    if (r.status === "preparando") statusText = "🔥 No Forno a Lenha";
-    else if (r.status === "finalizado") statusText = "✅ Entregue na Mesa";
+    let rStatus = r.status || "pendente";
+    let rBadgeText = "📋 Recebido na Cozinha";
+    let rBadgeStyle = "background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4);";
+    if (rStatus === "preparando") {
+      rBadgeText = "🔥 No Forno a Lenha";
+      rBadgeStyle = "background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.5); font-weight: 800;";
+    } else if (rStatus === "entrega") {
+      rBadgeText = "🍽️ Sendo Servido";
+      rBadgeStyle = "background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.5);";
+    } else if (rStatus === "finalizado") {
+      rBadgeText = "✅ Entregue na Mesa";
+      rBadgeStyle = "background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.5);";
+    }
 
     card.innerHTML = `
-      <div class="client-round-head">
-        <span>${r.roundNumber}ª Rodada (${r.timeStr})</span>
-        <span>${statusText}</span>
+      <div class="client-round-head" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+        <span style="font-weight: 800; font-size: 0.92rem; color: #fff;">${r.roundNumber || (idx + 1)}ª Rodada (${r.timeStr})</span>
+        <span style="font-size: 0.75rem; padding: 4px 10px; border-radius: 999px; ${rBadgeStyle}">${rBadgeText}</span>
       </div>
       <div>
         ${(r.items || []).map(it => `
-          <div class="client-item-row">
+          <div class="client-item-row" style="display: flex; justify-content: space-between; font-size: 0.85rem; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.06);">
             <div>
-              <div class="client-item-desc"><strong>${it.quantity}x</strong> ${it.flavorDescription || it.name}</div>
-              ${it.details ? `<div class="client-item-details">${it.details}</div>` : ''}
+              <div class="client-item-desc" style="color: #f1f5f9;"><strong>${it.quantity}x</strong> ${it.flavorDescription || it.name}</div>
+              ${it.details ? `<div class="client-item-details" style="font-size: 0.75rem; color: #94a3b8; margin-top: 2px;">${it.details}</div>` : ''}
             </div>
-            <div class="client-item-price">${formatMoney(it.totalPrice || (it.unitPrice * it.quantity))}</div>
+            <div class="client-item-price" style="font-weight: 700; color: #10b981; font-size: 0.9rem;">${formatMoney(it.totalPrice || (it.unitPrice * it.quantity))}</div>
           </div>
         `).join('')}
       </div>

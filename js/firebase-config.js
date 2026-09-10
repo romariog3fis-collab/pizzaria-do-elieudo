@@ -216,24 +216,58 @@ function fbListenOrders(onOrdersUpdated, onNewOrderArrived) {
  * Atualizar status do pedido (Pendente -> Preparando -> Entrega -> Finalizado)
  */
 function fbUpdateOrderStatus(orderId, newStatus) {
-  // Atualiza no cache local
+  // 1. Atualiza no cache local de pedidos
+  let tableKey = null;
+  let roundNum = null;
+
   try {
     const raw = localStorage.getItem("elieudo_orders_db");
     const list = raw ? JSON.parse(raw) : [];
-    const item = list.find(o => o.id === orderId);
+    const item = list.find(o => o.id === orderId || o.id === "#" + orderId.replace(/^ord_/, ""));
     if (item) {
       item.status = newStatus;
       localStorage.setItem("elieudo_orders_db", JSON.stringify(list));
+      if (item.tableKey) {
+        tableKey = item.tableKey;
+        roundNum = item.roundNumber;
+      }
     }
   } catch (e) {}
 
-  // Atualiza no Firebase se conectado
+  // Se não achou tableKey pelo item, tenta deduzir pelo padrão #M01-01 ou ord_M01-01
+  if (!tableKey) {
+    const cleanId = orderId.replace(/^#/, "").replace(/^ord_/, "");
+    const match = cleanId.match(/^M(\d+)-(\d+)$/i);
+    if (match) {
+      const tNum = parseInt(match[1], 10);
+      roundNum = parseInt(match[2], 10);
+      tableKey = `mesa_${tNum < 10 ? '0' + tNum : tNum}`;
+    }
+  }
+
+  // 2. Se pertencer a uma mesa, sincroniza a rodada na mesa local e nuvem imediatamente
+  if (tableKey && roundNum) {
+    const tables = getLocalTables();
+    if (tables && tables[tableKey] && tables[tableKey].currentSession) {
+      const session = tables[tableKey].currentSession;
+      const roundIdx = roundNum - 1;
+      if (session.rounds && session.rounds[roundIdx]) {
+        session.rounds[roundIdx].status = newStatus;
+        saveLocalTables(tables);
+        if (isFirebaseReady && fbDb) {
+          fbDb.ref(`tables/${tableKey}/currentSession/rounds/${roundIdx}/status`).set(newStatus);
+        }
+      }
+    }
+  }
+
+  // 3. Atualiza no Firebase no nó de pedidos se conectado
   if (isFirebaseReady && fbDb) {
     const safeKey = orderId.replace("#", "ord_");
     fbDb.ref(`orders/${safeKey}/status`).set(newStatus);
   }
 
-  // Notifica abas locais via BroadcastChannel
+  // 4. Notifica abas locais via BroadcastChannel
   if (window.BroadcastChannel) {
     try {
       const channel = new BroadcastChannel("elieudo_orders_bus");
@@ -242,6 +276,30 @@ function fbUpdateOrderStatus(orderId, newStatus) {
     } catch (e) {}
   }
   return Promise.resolve();
+}
+
+/**
+ * Atualizar status de uma rodada da mesa (pelo PDV ou garçom)
+ */
+function fbUpdateTableRoundStatus(tableNum, roundNumber, newStatus) {
+  const cleanNum = typeof tableNum === "number" ? tableNum : (parseInt(String(tableNum).replace(/\D/g, ""), 10) || 1);
+  const formattedKey = `mesa_${cleanNum < 10 ? '0' + cleanNum : cleanNum}`;
+  const roundOrderId = `#M${cleanNum < 10 ? '0' + cleanNum : cleanNum}-${roundNumber < 10 ? '0' + roundNumber : roundNumber}`;
+
+  const tables = getLocalTables();
+  if (tables && tables[formattedKey] && tables[formattedKey].currentSession) {
+    const session = tables[formattedKey].currentSession;
+    const roundIdx = roundNumber - 1;
+    if (session.rounds && session.rounds[roundIdx]) {
+      session.rounds[roundIdx].status = newStatus;
+      saveLocalTables(tables);
+      if (isFirebaseReady && fbDb) {
+        fbDb.ref(`tables/${formattedKey}/currentSession/rounds/${roundIdx}/status`).set(newStatus);
+      }
+    }
+  }
+
+  return fbUpdateOrderStatus(roundOrderId, newStatus);
 }
 
 /**
@@ -1067,6 +1125,7 @@ if (typeof window !== "undefined") {
   window.fbListenItemImages = fbListenItemImages;
   window.fbSaveItemImage = fbSaveItemImage;
   window.fbIsConnected = fbIsConnected;
+  window.fbUpdateTableRoundStatus = fbUpdateTableRoundStatus;
   window.getLocalTables = getLocalTables;
   window.saveLocalTables = saveLocalTables;
 }
